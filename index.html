@@ -1624,7 +1624,6 @@ function relockMarker() {
 
 function addMarker(t) {
   const m = L.marker([t.lat,t.lng], {icon:makeIcon(t,false), draggable:true, zIndexOffset:100});
-  try { m.dragging.disable(); } catch(e){}   // 通常は固定（誤って動かさない）
   let lpTimer = null, justUnlocked = false;
 
   const startPress = () => {
@@ -1668,6 +1667,7 @@ function addMarker(t) {
     relockMarker();
   });
   m.addTo(map);
+  try { m.dragging.disable(); } catch(e){}   // 地図追加後に固定（誤って動かさない）
   markerMap[t.id] = m;
 }
 
