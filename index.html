@@ -1615,22 +1615,58 @@ function makeIcon(t, sel) {
 
 map.on('zoomend', () => { trees.forEach(t => refreshMarker(t.id)); });
 
+// 移動モード管理（長押しで解錠した木を保持）
+var unlockedMarker = null, unlockTimer = null;
+function relockMarker() {
+  if (unlockedMarker) { try { unlockedMarker.dragging.disable(); } catch(e){} unlockedMarker = null; }
+  if (unlockTimer) { clearTimeout(unlockTimer); unlockTimer = null; }
+}
+
 function addMarker(t) {
   const m = L.marker([t.lat,t.lng], {icon:makeIcon(t,false), draggable:true, zIndexOffset:100});
+  try { m.dragging.disable(); } catch(e){}   // 通常は固定（誤って動かさない）
+  let lpTimer = null, justUnlocked = false;
+
+  const startPress = () => {
+    if (lpTimer) clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {            // 0.5秒長押しで移動モード
+      relockMarker();
+      try { m.dragging.enable(); } catch(e){}
+      unlockedMarker = m; justUnlocked = true;
+      try { if (navigator.vibrate) navigator.vibrate(40); } catch(e){}
+      document.getElementById('statusbar').textContent = '✋ #'+t.id+' を移動できます → そのままドラッグ（6秒で解除）';
+      unlockTimer = setTimeout(relockMarker, 6000);
+    }, 500);
+  };
+  const endPress = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+  m.on('mousedown', startPress);
+  m.on('touchstart', startPress);
+  m.on('mouseup', endPress);
+  m.on('touchend', endPress);
+
   m.on('click', () => {
+    endPress();
+    if (justUnlocked) { justUnlocked = false; return; }  // 長押し解錠直後のタップは無視
+    if (unlockedMarker === m) return;                    // 移動モード中はステータス変更しない
     setTool('select');
     const task = document.getElementById('header-task')?.value || '';
-    if (task && selId === t.id) { cycleTaskSt(t.id, task); }
-    selectTree(t.id);
-    openPanel();
+    if (task) {
+      cycleTaskSt(t.id, task);     // タップごとに 未着手→作業中→完了→未着手 を切替
+      selectTree(t.id);            // 情報は更新するがパネルは開かない
+    } else {
+      selectTree(t.id);
+      openPanel();                 // 作業未選択なら編集パネルを開く
+    }
   });
+
   m.on('dragstart', () => { pushUndo(); map.dragging.disable(); });
   m.on('dragend', e => {
     map.dragging.enable();
     const tt = trees.find(x=>x.id===t.id);
     if (tt) { tt.lat=e.target.getLatLng().lat; tt.lng=e.target.getLatLng().lng; }
+    document.getElementById('statusbar').textContent = '✅ #'+t.id+' の位置を移動しました';
+    relockMarker();
   });
-  // 長押しでプレビューマーカーを削除する代替（通常マーカーは不要）
   m.addTo(map);
   markerMap[t.id] = m;
 }
