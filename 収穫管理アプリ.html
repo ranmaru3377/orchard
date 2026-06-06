@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梶原果樹園 収穫管理</title>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--orange:#e8870c;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.82rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:9px 13px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.85rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+.opt-field.selected{background:#fff3e0;border-color:var(--orange);color:var(--orange);}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.count-row{display:flex;align-items:center;gap:8px;}
+.count-btn{width:48px;height:48px;border:1.5px solid var(--border);border-radius:10px;background:#fff;font-size:1.4rem;cursor:pointer;flex-shrink:0;}
+.count-input{flex:1;text-align:center;font-size:1.5rem;font-weight:700;}
+.quick-add{display:flex;gap:6px;margin-top:8px;}
+.quick-btn{flex:1;padding:8px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.8rem;cursor:pointer;font-family:inherit;}
+.row2{display:flex;gap:10px;}
+.row2>div{flex:1;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;opacity:0;transition:0.3s;}
+.save-msg.show{opacity:1;}
+.sync-status{font-size:0.78rem;text-align:center;margin-top:8px;font-weight:500;min-height:1.2em;color:var(--blue);}
+.cum-display{background:var(--green-pale);border-radius:10px;padding:12px;text-align:center;margin-top:10px;}
+.cum-display .label{font-size:0.72rem;color:var(--text-light);}
+.cum-display .value{font-size:1.5rem;font-weight:700;color:var(--green);}
+.list-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;}
+.list-date{font-size:0.82rem;font-weight:700;color:var(--green);}
+.list-detail{font-size:0.8rem;color:var(--text);margin-top:4px;}
+.chip{display:inline-block;background:var(--green-pale);border-radius:6px;padding:2px 8px;font-size:0.74rem;margin:2px 3px 0 0;}
+.chip.field{background:#fff3e0;color:var(--orange);}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee;}
+.summary-row .name{font-weight:600;font-size:0.9rem;}
+.summary-row .v{font-weight:700;color:var(--green);font-size:0.95rem;}
+.summary-row.total{border-top:2px solid var(--green);}
+.seg{display:flex;gap:6px;margin-bottom:12px;}
+.seg button{flex:1;padding:9px;border:1.5px solid var(--border);background:#fff;border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;color:var(--text-light);}
+.seg button.active{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:700;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🍐 梶原果樹園 収穫管理</h1>
+  <div class="sub">荒尾市 ― 収穫コンテナ数の記録</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
+  <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('summary',event)">📊 集計</button>
+</div>
+
+<!-- 入力ページ -->
+<div id="page-input" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🍐 品種</div>
+    <div class="btn-group" id="variety-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📍 園地</div>
+    <div class="btn-group" id="field-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📦 収穫コンテナ数</div>
+    <div class="count-row">
+      <button class="count-btn" onclick="addCount(-1)">－</button>
+      <input type="number" id="count" class="count-input" placeholder="0" inputmode="numeric" oninput="updateCum()">
+      <button class="count-btn" onclick="addCount(1)">＋</button>
+    </div>
+    <div class="quick-add">
+      <button class="quick-btn" onclick="addCount(1)">+1</button>
+      <button class="quick-btn" onclick="addCount(5)">+5</button>
+      <button class="quick-btn" onclick="addCount(10)">+10</button>
+    </div>
+    <div class="cum-display">
+      <div class="label">この品種の累計（今年度）</div>
+      <div class="value" id="cum-value">—</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 備考</div>
+    <input type="text" id="note" placeholder="例：A品中心、玉太り良好">
+  </div>
+
+  <button class="btn-save" onclick="saveRecord()">💾 保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+  <div class="sync-status" id="sync-status"></div>
+</div>
+
+<!-- 履歴ページ -->
+<div id="page-list" class="page">
+  <div id="list-content"></div>
+</div>
+
+<!-- 集計ページ -->
+<div id="page-summary" class="page">
+  <div class="card">
+    <div class="card-title">📅 対象年度</div>
+    <input type="number" id="summary-year" inputmode="numeric">
+  </div>
+  <div class="seg">
+    <button id="seg-variety" class="active" onclick="setSeg('variety')">品種別</button>
+    <button id="seg-field" onclick="setSeg('field')">園地別</button>
+  </div>
+  <div class="card">
+    <div class="card-title" id="summary-title">📊 品種別 コンテナ数</div>
+    <div id="summary-content"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">☁️ Googleスプレッドシート送信</div>
+    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
+    <div class="sync-status" id="sync-status2"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='kajiwara_harvest_v1';
+let records=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+
+// ▼▼▼ GASのURLを貼り付け（収穫シートに送信） ▼▼▼
+const GAS_URL='';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+const VARIETIES=['愛甘水','甘ひびき','あきあかり','あきづき','豊水','南水','甘太','かおり','秋麗','新高','ヤーリー','その他'];
+const FIELDS=['長洲園','新図園畑','新図園山','自宅園'];
+let selVariety='', selField='', seg='variety';
+
+function init(){
+  const vb=document.getElementById('variety-btns');
+  VARIETIES.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    b.onclick=()=>{document.querySelectorAll('#variety-btns .opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');selVariety=v;updateCum();};
+    vb.appendChild(b);
+  });
+  const fb=document.getElementById('field-btns');
+  FIELDS.forEach(f=>{
+    const b=document.createElement('button');b.className='opt opt-field';b.textContent=f;
+    b.onclick=()=>{document.querySelectorAll('#field-btns .opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');selField=f;};
+    fb.appendChild(b);
+  });
+  setToday();
+  document.getElementById('summary-year').value=new Date().getFullYear();
+}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+  if(name==='summary')renderSummary();
+}
+
+function addCount(n){
+  const el=document.getElementById('count');
+  el.value=Math.max(0,(parseInt(el.value)||0)+n);
+  updateCum();
+}
+
+function currentYear(){return new Date(document.getElementById('rec-date').value||Date.now()).getFullYear();}
+
+function updateCum(){
+  const el=document.getElementById('cum-value');
+  if(!selVariety){el.textContent='品種を選択';return;}
+  const yr=currentYear();
+  const now=parseInt(document.getElementById('count').value)||0;
+  const past=records.filter(r=>r.variety===selVariety&&new Date(r.date).getFullYear()===yr).reduce((s,r)=>s+(r.count||0),0);
+  el.textContent=(past+now).toLocaleString()+' コンテナ';
+}
+
+function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  const count=parseInt(document.getElementById('count').value)||0;
+  if(!date){alert('日付を選んでください');return;}
+  if(!selVariety){alert('品種を選んでください');return;}
+  if(count<=0){alert('コンテナ数を入力してください');return;}
+  const rec={id:Date.now(),date,variety:selVariety,field:selField,count,note:document.getElementById('note').value.trim()};
+  records.push(rec);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  syncOne(rec);
+  const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);
+  document.getElementById('count').value='';
+  document.getElementById('note').value='';
+  updateCum();
+}
+
+async function syncOne(rec){
+  if(!GAS_URL){setSync('sync-status','💾 端末に保存しました（シート未連携）');return;}
+  setSync('sync-status','📤 送信中...');
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'収穫',...rec})});
+    setSync('sync-status','✅ シートに送信しました');
+  }catch(e){setSync('sync-status','⚠️ 送信失敗（端末には保存済）');}
+}
+
+async function syncAll(){
+  if(!GAS_URL){alert('GAS_URLが設定されていません');return;}
+  if(records.length===0){alert('送信するデータがありません');return;}
+  setSync('sync-status2','📤 '+records.length+'件送信中...');
+  let ok=0;
+  for(const rec of records){
+    try{await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'収穫',...rec})});ok++;await new Promise(r=>setTimeout(r,100));}catch(e){}
+  }
+  setSync('sync-status2','✅ '+ok+'件送信完了');
+}
+
+function setSync(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg;}
+
+function renderList(){
+  const el=document.getElementById('list-content');
+  if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
+  const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=sorted.map(r=>{
+    const[y,m,d]=r.date.split('-');
+    let chips='';
+    if(r.field)chips+=`<span class="chip field">📍${r.field}</span>`;
+    return`<div class="list-item">
+      <div class="list-date">${y}年${+m}月${+d}日　${r.variety}　<span style="color:#1565c0">${r.count.toLocaleString()}コンテナ</span>
+        <span style="float:right;color:#ccc;cursor:pointer" onclick="delRec(${r.id})">✕</span></div>
+      ${chips?`<div class="list-detail">${chips}</div>`:''}
+      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function delRec(id){
+  if(!confirm('この記録を削除しますか？'))return;
+  records=records.filter(r=>r.id!==id);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
+}
+
+function setSeg(s){
+  seg=s;
+  document.getElementById('seg-variety').classList.toggle('active',s==='variety');
+  document.getElementById('seg-field').classList.toggle('active',s==='field');
+  document.getElementById('summary-title').textContent=s==='variety'?'📊 品種別 コンテナ数':'📊 園地別 コンテナ数';
+  renderSummary();
+}
+
+function renderSummary(){
+  const yr=parseInt(document.getElementById('summary-year').value)||new Date().getFullYear();
+  const el=document.getElementById('summary-content');
+  const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
+  if(filtered.length===0){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
+  const keys=seg==='variety'?VARIETIES:FIELDS;
+  const keyName=seg==='variety'?'variety':'field';
+  let total=0;
+  let html=keys.map(k=>{
+    const sum=filtered.filter(r=>r[keyName]===k).reduce((s,r)=>s+(r.count||0),0);
+    total+=sum;
+    return sum>0?`<div class="summary-row"><span class="name">${k||'(未設定)'}</span><span class="v">${sum.toLocaleString()}コンテナ</span></div>`:'';
+  }).join('');
+  // 未設定（園地未選択）分
+  if(seg==='field'){
+    const noField=filtered.filter(r=>!r.field).reduce((s,r)=>s+(r.count||0),0);
+    if(noField>0){html+=`<div class="summary-row"><span class="name">(園地未設定)</span><span class="v">${noField.toLocaleString()}コンテナ</span></div>`;total+=0;}
+  }
+  html+=`<div class="summary-row total"><span class="name">合計</span><span class="v" style="font-size:1.1rem">${total.toLocaleString()}コンテナ</span></div>`;
+  el.innerHTML=html;
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const sy=document.getElementById('summary-year');
+  if(sy)sy.addEventListener('input',renderSummary);
+  const rd=document.getElementById('rec-date');
+  if(rd)rd.addEventListener('change',updateCum);
+});
+
+init();
+</script>
+</body>
+</html>

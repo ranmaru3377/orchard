@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梶原果樹園 農薬散布管理</title>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--red:#c0392b;
+--c-fung:#1565c0;--c-fung-bg:#e3f0fb;--c-insc:#c0392b;--c-insc-bg:#fbe3e3;--c-stick:#e8870c;--c-stick-bg:#fdf0dd;--c-foliar:#2e7d32;--c-foliar-bg:#e6f4e6;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.8rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:9px 13px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.85rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;opacity:0;transition:0.3s;}
+.save-msg.show{opacity:1;}
+.sync-status{font-size:0.78rem;text-align:center;margin-top:8px;font-weight:500;min-height:1.2em;color:var(--blue);}
+.list-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;}
+.list-date{font-size:0.82rem;font-weight:700;color:var(--green);}
+.list-detail{font-size:0.8rem;color:var(--text);margin-top:4px;}
+.chip{display:inline-block;background:var(--green-pale);border-radius:6px;padding:2px 8px;font-size:0.74rem;margin:2px 3px 0 0;}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+/* 薬剤種別タブ */
+.cat-tabs{display:flex;gap:4px;margin-bottom:10px;flex-wrap:wrap;}
+.cat-tab{padding:6px 10px;border:1.5px solid var(--border);background:#fff;border-radius:8px;font-size:0.78rem;cursor:pointer;font-family:inherit;color:var(--text-light);}
+.cat-tab.active.fung{background:var(--c-fung-bg);border-color:var(--c-fung);color:var(--c-fung);font-weight:700;}
+.cat-tab.active.insc{background:var(--c-insc-bg);border-color:var(--c-insc);color:var(--c-insc);font-weight:700;}
+.cat-tab.active.stick{background:var(--c-stick-bg);border-color:var(--c-stick);color:var(--c-stick);font-weight:700;}
+.cat-tab.active.foliar{background:var(--c-foliar-bg);border-color:var(--c-foliar);color:var(--c-foliar);font-weight:700;}
+/* 選択済み薬剤バッジ */
+.selected-chems{margin-top:10px;}
+.chem-badge{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:8px;margin-bottom:6px;font-size:0.85rem;}
+.chem-badge.fung{background:var(--c-fung-bg);border-left:4px solid var(--c-fung);}
+.chem-badge.insc{background:var(--c-insc-bg);border-left:4px solid var(--c-insc);}
+.chem-badge.stick{background:var(--c-stick-bg);border-left:4px solid var(--c-stick);}
+.chem-badge.foliar{background:var(--c-foliar-bg);border-left:4px solid var(--c-foliar);}
+.chem-badge .cb-name{font-weight:600;flex:1;}
+.chem-badge .cb-dil{width:90px;}
+.chem-badge .cb-dil input{padding:5px 7px;font-size:0.8rem;text-align:center;}
+.chem-badge .cb-del{color:#999;cursor:pointer;font-size:0.8rem;}
+.chem-pick{padding:7px 11px;border:1.5px solid var(--border);background:#fff;border-radius:18px;font-size:0.82rem;cursor:pointer;font-family:inherit;}
+.chem-pick.fung{border-color:var(--c-fung);color:var(--c-fung);}
+.chem-pick.insc{border-color:var(--c-insc);color:var(--c-insc);}
+.chem-pick.stick{border-color:var(--c-stick);color:var(--c-stick);}
+.chem-pick.foliar{border-color:var(--c-foliar);color:var(--c-foliar);}
+.chem-pick.added{opacity:0.4;}
+.add-chem-row{display:flex;gap:6px;margin-top:8px;}
+.add-chem-row input{flex:1;font-size:0.85rem;}
+.chem-suggest{margin-top:4px;}
+.chem-suggest .sg{display:inline-flex;align-items:center;margin:3px 4px 0 0;border:1.5px solid var(--border);background:#fafafa;border-radius:16px;font-size:0.82rem;overflow:hidden;}
+.chem-suggest .sg-pick{padding:6px 8px 6px 11px;cursor:pointer;}
+.chem-suggest .sg-del{padding:6px 9px;color:#bbb;cursor:pointer;border-left:1px solid var(--border);font-size:0.72rem;}
+.chem-suggest .sg-del:active{background:#fbe3e3;color:var(--red);}
+.chem-suggest .sg-cat{font-size:0.66rem;padding:1px 5px;border-radius:4px;margin-right:4px;}
+.cat-badge{display:inline-block;font-size:0.68rem;padding:1px 6px;border-radius:4px;margin-right:4px;}
+.cat-badge.fung{background:var(--c-fung-bg);color:var(--c-fung);}
+.cat-badge.insc{background:var(--c-insc-bg);color:var(--c-insc);}
+.cat-badge.stick{background:var(--c-stick-bg);color:var(--c-stick);}
+.cat-badge.foliar{background:var(--c-foliar-bg);color:var(--c-foliar);}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #eee;}
+.summary-row .name{font-weight:600;font-size:0.88rem;}
+.summary-row .detail{font-size:0.74rem;color:var(--text-light);margin-top:2px;}
+.summary-row .v{font-weight:700;color:var(--green);font-size:0.9rem;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🧪 梶原果樹園 農薬散布管理</h1>
+  <div class="sub">荒尾市 ― 防除記録・トレーサビリティ（混用対応）</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
+  <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('usage',event)">🔢 使用回数</button>
+</div>
+
+<!-- 入力ページ -->
+<div id="page-input" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📍 対象園地（複数選択できます）</div>
+    <div class="btn-group" id="field-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧪 薬剤（混用は続けて追加できます）</div>
+    <div class="cat-tabs" id="cat-tabs"></div>
+    <div class="add-chem-row">
+      <input type="text" id="chem-input" placeholder="薬剤名を入力（過去の薬剤が候補に出ます）" autocomplete="off" oninput="onChemInput()" onfocus="renderSuggest()" onkeydown="onChemKey(event)">
+      <button class="btn-today" onclick="addChemToMix()">＋追加</button>
+    </div>
+    <div id="chem-suggest" class="chem-suggest"></div>
+    <div class="add-chem-row" style="margin-top:8px;">
+      <input type="text" id="chem-dil" placeholder="希釈倍率（例：1000）" autocomplete="off" style="flex:1;">
+    </div>
+    <div class="selected-chems" id="selected-chems"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⚗️ 1反あたり散布量（L）</div>
+    <div class="btn-group" id="amount-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🐛 対象病害虫</div>
+    <input type="text" id="target" placeholder="例：黒星病、ハダニ">
+  </div>
+
+  <div class="card">
+    <div class="card-title">🌤️ 天候</div>
+    <div class="btn-group" id="weather-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">💨 風</div>
+    <div class="btn-group" id="wind-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🕐 時間帯</div>
+    <div class="btn-group" id="time-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 備考</div>
+    <input type="text" id="note" placeholder="例：収穫○日前">
+  </div>
+
+  <button class="btn-save" id="save-btn" onclick="saveRecord()">💾 保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+  <div class="sync-status" id="sync-status"></div>
+</div>
+
+<!-- 履歴ページ -->
+<div id="page-list" class="page">
+  <div id="list-content"></div>
+</div>
+
+<!-- 使用回数ページ -->
+<div id="page-usage" class="page">
+  <div class="card">
+    <div class="card-title">📅 対象年度・園地</div>
+    <div style="display:flex;gap:8px;">
+      <input type="number" id="usage-year" inputmode="numeric" style="flex:1;">
+      <select id="usage-field" onchange="renderUsage()" style="flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;font-family:inherit;">
+        <option value="自宅園">自宅園</option>
+        <option value="長洲園">長洲園</option>
+        <option value="新図園(畑)">新図園(畑)</option>
+        <option value="新図園(山)">新図園(山)</option>
+        <option value="全園">全園</option>
+        <option value="">全て表示</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🔢 薬剤×園地 使用回数</div>
+    <div class="note" style="margin-bottom:8px;">混用に含まれた薬剤も1回としてカウントします。使用回数制限の確認にお使いください。</div>
+    <div id="usage-content"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">☁️ Googleスプレッドシート送信</div>
+    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
+    <div class="sync-status" id="sync-status2"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='kajiwara_pesticide_v2';
+const CHEM_KEY='kajiwara_chem_list_v2';
+let records=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+// 過去に使った薬剤の記憶 [{name, cat}]（オートコンプリート候補用）
+let chemMemory=JSON.parse(localStorage.getItem(CHEM_KEY)||'[]');
+
+// ▼▼▼ GASのURLを貼り付け（農薬シートに送信） ▼▼▼
+const GAS_URL='';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+const FIELDS=['長洲園','新図園(畑)','新図園(山)','自宅園','全園'];
+const AMOUNTS=['250','300','400'];
+const WEATHERS=['晴れ','曇り'];
+const WINDS=['無風','弱','強'];
+const TIMES=['早朝','日中','夕方'];
+const CATS=[
+  {key:'fung',label:'殺菌剤'},
+  {key:'insc',label:'殺虫剤'},
+  {key:'stick',label:'展着剤'},
+  {key:'foliar',label:'葉面散布剤'}
+];
+function catLabel(k){const c=CATS.find(c=>c.key===k);return c?c.label:k;}
+
+let selFields=[], selAmount='', selWeather='', selWind='', selTime='';
+let curCat='fung';
+// 選択済み薬剤 [{name,cat,dilution}]
+let selChems=[];
+
+function init(){
+  makeFieldBtns();
+  makeBtns('amount-btns',AMOUNTS,v=>selAmount=v,'L');
+  makeBtns('weather-btns',WEATHERS,v=>selWeather=v);
+  makeBtns('wind-btns',WINDS,v=>selWind=v);
+  makeBtns('time-btns',TIMES,v=>selTime=v);
+  renderCatTabs();
+  renderSuggest();
+  renderSelectedChems();
+  setToday();
+  document.getElementById('usage-year').value=new Date().getFullYear();
+}
+
+function makeBtns(containerId,items,onSelect,suffix){
+  const c=document.getElementById(containerId);
+  items.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v+(suffix||'');
+    b.onclick=()=>{c.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');onSelect(v);};
+    c.appendChild(b);
+  });
+}
+
+function makeFieldBtns(){
+  const c=document.getElementById('field-btns');
+  FIELDS.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    b.onclick=()=>{
+      if(v==='全園'){
+        // 「全園」を押したら他を解除して全園のみ
+        c.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));
+        b.classList.add('selected');
+        selFields=['全園'];
+      }else{
+        // 個別園地：全園が選ばれていたら解除
+        const zen=[...c.querySelectorAll('.opt')].find(x=>x.textContent==='全園');
+        if(zen)zen.classList.remove('selected');
+        selFields=selFields.filter(f=>f!=='全園');
+        b.classList.toggle('selected');
+        if(b.classList.contains('selected'))selFields.push(v);
+        else selFields=selFields.filter(f=>f!==v);
+      }
+    };
+    c.appendChild(b);
+  });
+}
+
+function renderCatTabs(){
+  const c=document.getElementById('cat-tabs');
+  c.innerHTML='';
+  CATS.forEach(cat=>{
+    const b=document.createElement('button');
+    b.className='cat-tab '+cat.key+(cat.key===curCat?' active':'');
+    b.textContent=cat.label;
+    b.onclick=()=>{curCat=cat.key;renderCatTabs();renderSuggest();};
+    c.appendChild(b);
+  });
+}
+
+function renderSuggest(){
+  const c=document.getElementById('chem-suggest');
+  const q=document.getElementById('chem-input').value.trim();
+  // 現在の種別の薬剤記憶から、入力文字で絞り込み（未入力なら現種別の全候補）
+  let cand=chemMemory.filter(m=>m.cat===curCat);
+  if(q)cand=cand.filter(m=>m.name.includes(q));
+  // 未選択のものだけ
+  cand=cand.filter(m=>!selChems.some(s=>s.name===m.name&&s.cat===m.cat));
+  if(cand.length===0){c.innerHTML='';return;}
+  c.innerHTML=cand.slice(0,12).map((m,i)=>
+    `<span class="sg"><span class="sg-pick" data-act="pick" data-idx="${i}"><span class="sg-cat cat-badge ${m.cat}">${catLabel(m.cat)}</span>${m.name}</span><span class="sg-del" data-act="del" data-idx="${i}">✕</span></span>`
+  ).join('');
+  // イベント委譲で確実にクリックを拾う
+  c._cand=cand.slice(0,12);
+  c.querySelectorAll('[data-act]').forEach(el=>{
+    el.onclick=(e)=>{
+      e.stopPropagation();
+      const idx=parseInt(el.getAttribute('data-idx'));
+      const m=c._cand[idx];
+      if(!m)return;
+      if(el.getAttribute('data-act')==='pick'){
+        document.getElementById('chem-input').value=m.name;
+        renderSuggest();
+        addChemToMix();
+      }else{
+        forgetChem(m.name,m.cat);
+      }
+    };
+  });
+}
+
+function onChemInput(){renderSuggest();}
+
+function onChemKey(e){
+  if(e.key==='Enter'){e.preventDefault();addChemToMix();}
+}
+
+function pickSuggest(name){
+  document.getElementById('chem-input').value=name;
+  renderSuggest();
+  addChemToMix();
+}
+
+function forgetChem(name,cat){
+  if(!confirm(`候補から「${name}」を削除しますか？\n（過去の散布記録は残ります）`))return;
+  chemMemory=chemMemory.filter(m=>!(m.name===name&&m.cat===cat));
+  localStorage.setItem(CHEM_KEY,JSON.stringify(chemMemory));
+  renderSuggest();
+}
+
+function addChemToMix(){
+  const input=document.getElementById('chem-input');
+  const name=input.value.trim();
+  if(!name)return;
+  const dil=document.getElementById('chem-dil').value.trim();
+  // 重複チェック
+  if(selChems.some(s=>s.name===name&&s.cat===curCat)){alert('この薬剤はもう追加されています');return;}
+  selChems.push({name,cat:curCat,dilution:dil});
+  // 記憶に追加（次回から候補に出る）
+  if(!chemMemory.some(m=>m.name===name&&m.cat===curCat)){
+    chemMemory.push({name,cat:curCat});
+    localStorage.setItem(CHEM_KEY,JSON.stringify(chemMemory));
+  }
+  input.value='';
+  document.getElementById('chem-dil').value='';
+  renderSuggest();
+  renderSelectedChems();
+}
+
+function renderSelectedChems(){
+  const c=document.getElementById('selected-chems');
+  if(selChems.length===0){c.innerHTML='<div class="note" style="margin-top:8px;">↑ 上から薬剤を選んでください（複数選択で混用記録）</div>';return;}
+  c.innerHTML='<div style="font-size:0.74rem;color:var(--text-light);margin:8px 0 6px;">選択中（希釈倍率を入力）：</div>'+
+  selChems.map((s,i)=>`
+    <div class="chem-badge ${s.cat}">
+      <span class="cb-name">${s.name}</span>
+      <span class="cb-dil"><input type="text" placeholder="倍率" value="${s.dilution}" oninput="setDil(${i},this.value)"></span>
+      <span class="cb-del" onclick="removeChem(${i})">✕</span>
+    </div>`).join('');
+}
+
+function setDil(i,val){if(selChems[i])selChems[i].dilution=val.trim();}
+function removeChem(i){selChems.splice(i,1);renderSuggest();renderSelectedChems();}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+  if(name==='usage')renderUsage();
+}
+
+function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  if(!date){alert('日付を選んでください');return;}
+  if(selFields.length===0){alert('対象園地を選んでください');return;}
+  if(selChems.length===0){alert('薬剤を選んでください');return;}
+  const rec={
+    id:editingId||Date.now(),date,field:selFields.join('・'),
+    chems:selChems.map(s=>({name:s.name,cat:s.cat,dilution:s.dilution})),
+    amount:selAmount,
+    target:document.getElementById('target').value.trim(),
+    weather:selWeather,wind:selWind,time:selTime,
+    note:document.getElementById('note').value.trim()
+  };
+  if(editingId){
+    records=records.map(r=>r.id===editingId?rec:r);
+  }else{
+    records.push(rec);
+  }
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  syncOne(rec);
+  const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);
+  // 保存ボタンを元に戻す
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 保存する';btn.style.background='';
+  editingId=null;
+  selChems=[];renderSuggest();renderSelectedChems();
+  document.getElementById('target').value='';
+  document.getElementById('note').value='';
+}
+
+async function syncOne(rec){
+  if(!GAS_URL){setSync('sync-status','💾 端末に保存しました（シート未連携）');return;}
+  setSync('sync-status','📤 送信中...');
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'農薬',...rec,chems:JSON.stringify(rec.chems)})});
+    setSync('sync-status','✅ シートに送信しました');
+  }catch(e){setSync('sync-status','⚠️ 送信失敗（端末には保存済）');}
+}
+
+async function syncAll(){
+  if(!GAS_URL){alert('GAS_URLが設定されていません');return;}
+  if(records.length===0){alert('送信するデータがありません');return;}
+  setSync('sync-status2','📤 '+records.length+'件送信中...');
+  let ok=0;
+  for(const rec of records){
+    try{await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'農薬',...rec,chems:JSON.stringify(rec.chems)})});ok++;await new Promise(r=>setTimeout(r,100));}catch(e){}
+  }
+  setSync('sync-status2','✅ '+ok+'件送信完了');
+}
+
+function setSync(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg;}
+
+function renderList(){
+  const el=document.getElementById('list-content');
+  if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
+  const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=sorted.map(r=>{
+    const[y,m,d]=r.date.split('-');
+    let chemHtml=(r.chems||[]).map(ch=>
+      `<div class="list-detail"><span class="cat-badge ${ch.cat}">${catLabel(ch.cat)}</span><b>${ch.name}</b>${ch.dilution?` <span style="color:#888">${ch.dilution}${/[倍×]/.test(ch.dilution)?'':'倍'}</span>`:''}</div>`
+    ).join('');
+    let chips='';
+    if(r.amount)chips+=`<span class="chip">${r.amount}L/反</span>`;
+    if(r.target)chips+=`<span class="chip">🐛${r.target}</span>`;
+    if(r.weather)chips+=`<span class="chip">🌤️${r.weather}</span>`;
+    if(r.wind)chips+=`<span class="chip">💨${r.wind}</span>`;
+    if(r.time)chips+=`<span class="chip">🕐${r.time}</span>`;
+    return`<div class="list-item" id="li-${r.id}">
+      <div class="list-date">${y}年${+m}月${+d}日　${r.field}
+        <span style="float:right;display:flex;gap:10px;align-items:center;">
+          <span style="color:#1565c0;cursor:pointer;font-size:0.78rem;" onclick="editRec(${r.id})">✏️編集</span>
+          <span style="color:#ccc;cursor:pointer;" onclick="delRec(${r.id})">✕</span>
+        </span>
+      </div>
+      ${chemHtml}
+      ${chips?`<div class="list-detail" style="margin-top:6px">${chips}</div>`:''}
+      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function delRec(id){
+  if(!confirm('この記録を削除しますか？'))return;
+  records=records.filter(r=>r.id!==id);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
+}
+
+let editingId=null;
+
+function editRec(id){
+  const rec=records.find(r=>r.id===id);
+  if(!rec)return;
+  editingId=id;
+  // 入力タブへ移動
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-input').classList.add('active');
+  document.querySelector('.tab-btn').classList.add('active');
+  // 日付
+  document.getElementById('rec-date').value=rec.date;
+  // 園地（複数選択を復元）
+  selFields=(rec.field||'').split('・').filter(Boolean);
+  document.querySelectorAll('#field-btns .opt').forEach(b=>{
+    b.classList.toggle('selected',selFields.includes(b.textContent));
+  });
+  // 散布量
+  selAmount=rec.amount||'';
+  document.querySelectorAll('#amount-btns .opt').forEach(b=>{
+    b.classList.toggle('selected',b.textContent===selAmount+'L');
+  });
+  // 天候・風・時間帯
+  selWeather=rec.weather||''; selWind=rec.wind||''; selTime=rec.time||'';
+  document.querySelectorAll('#weather-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selWeather));
+  document.querySelectorAll('#wind-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selWind));
+  document.querySelectorAll('#time-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selTime));
+  // 薬剤（混用）
+  selChems=(rec.chems||[]).map(ch=>({name:ch.name,cat:ch.cat,dilution:ch.dilution||''}));
+  renderSuggest(); renderSelectedChems();
+  // 対象病害虫・備考
+  document.getElementById('target').value=rec.target||'';
+  document.getElementById('note').value=rec.note||'';
+  // 保存ボタンを「更新」表示に
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 この内容で更新する';
+  btn.style.background='#1565c0';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function renderUsage(){
+  const yr=parseInt(document.getElementById('usage-year').value)||new Date().getFullYear();
+  const filterField=document.getElementById('usage-field')?document.getElementById('usage-field').value:'';
+  const el=document.getElementById('usage-content');
+  const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
+  if(filtered.length===0){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
+  const map={};
+  filtered.forEach(r=>{
+    const fields=(r.field||'').split('・').filter(Boolean);
+    (r.chems||[]).forEach(ch=>{
+      fields.forEach(fld=>{
+        if(filterField&&fld!==filterField)return;
+        const key=ch.name+'|'+fld;
+        if(!map[key])map[key]={name:ch.name,cat:ch.cat,field:fld,count:0,lastDate:''};
+        map[key].count++;
+        if(r.date>map[key].lastDate)map[key].lastDate=r.date;
+      });
+    });
+  });
+  const arr=Object.values(map).sort((a,b)=>a.field.localeCompare(b.field)||a.name.localeCompare(b.name));
+  if(arr.length===0){el.innerHTML='<div class="empty">この園地の記録はありません</div>';return;}
+  // 園地ごとにグループ化して表示
+  let html='';let lastField='';
+  arr.forEach(u=>{
+    const[,m,d]=u.lastDate.split('-');
+    if(u.field!==lastField){
+      if(lastField!=='')html+='</div>';
+      html+=`<div style="margin-bottom:12px;"><div style="font-size:0.78rem;font-weight:700;color:var(--green);padding:6px 0 4px;border-bottom:1.5px solid var(--green-pale);">📍${u.field}</div>`;
+      lastField=u.field;
+    }
+    html+=`<div class="summary-row">
+      <div><div class="name"><span class="cat-badge ${u.cat}">${catLabel(u.cat)}</span>${u.name}</div><div class="detail">最終散布 ${+m}/${+d}</div></div>
+      <div class="v">${u.count}回</div>
+    </div>`;
+  });
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const uy=document.getElementById('usage-year');
+  if(uy)uy.addEventListener('input',renderUsage);
+});
+
+init();
+</script>
+</body>
+</html>

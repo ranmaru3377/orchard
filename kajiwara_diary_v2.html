@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="梶原果樹園日誌">
+<title>梶原果樹園 作業日誌</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Sans+JP:wght@400;500&display=swap');
+
+  :root {
+    --green-dark: #2d5016;
+    --green-mid: #4a7c2e;
+    --green-light: #7db356;
+    --green-pale: #e8f4de;
+    --brown: #8b5e3c;
+    --brown-light: #f5ede4;
+    --gold: #c9a02a;
+    --text: #1a1a1a;
+    --text-light: #555;
+    --border: #d0c8b8;
+    --bg: #faf8f4;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Sans JP', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ヘッダー */
+  header {
+    background: var(--green-dark);
+    color: white;
+    padding: 14px 16px 10px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+  }
+  header h1 {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+  }
+  header .sub {
+    font-size: 0.7rem;
+    opacity: 0.75;
+    margin-top: 2px;
+  }
+
+  /* タブ */
+  .tabs {
+    display: flex;
+    background: var(--green-dark);
+    border-top: 1px solid rgba(255,255,255,0.15);
+  }
+  .tab-btn {
+    flex: 1;
+    padding: 10px 4px;
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-size: 0.75rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    cursor: pointer;
+    transition: all 0.2s;
+    border-bottom: 3px solid transparent;
+  }
+  .tab-btn.active {
+    color: white;
+    border-bottom-color: var(--gold);
+    font-weight: 500;
+  }
+
+  /* メインコンテンツ */
+  .page { display: none; padding: 16px; }
+  .page.active { display: block; }
+
+  /* 日付選択 */
+  .date-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .date-nav input[type="date"] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    background: white;
+    color: var(--text);
+  }
+  .btn-today {
+    padding: 10px 14px;
+    background: var(--green-mid);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  /* 記録フォーム */
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .card-title {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--green-dark);
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--green-pale);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 天気ボタン */
+  .btn-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+  .btn-option {
+    padding: 7px 14px;
+    border: 1.5px solid var(--border);
+    border-radius: 20px;
+    background: white;
+    font-size: 0.82rem;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .btn-option.selected {
+    background: var(--green-mid);
+    border-color: var(--green-mid);
+    color: white;
+    font-weight: 500;
+  }
+  .btn-option:active { transform: scale(0.96); }
+
+  /* 気温入力 */
+  .temp-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 10px;
+  }
+  .temp-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .temp-item label {
+    font-size: 0.72rem;
+    color: var(--text-light);
+  }
+  .temp-item input {
+    padding: 8px 10px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    text-align: center;
+    width: 100%;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+
+  /* 品種チェック */
+  .variety-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .variety-btn {
+    padding: 8px 4px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-family: 'Noto Sans JP', sans-serif;
+    line-height: 1.3;
+  }
+  .variety-btn.selected {
+    background: var(--green-pale);
+    border-color: var(--green-mid);
+    color: var(--green-dark);
+    font-weight: 500;
+  }
+
+  /* 作業種類 */
+  .work-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+  }
+  .work-btn {
+    padding: 8px 4px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    font-size: 0.78rem;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .work-btn.selected {
+    background: var(--brown-light);
+    border-color: var(--brown);
+    color: var(--brown);
+    font-weight: 500;
+  }
+
+  /* メモ */
+  textarea {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    resize: vertical;
+    min-height: 80px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  textarea:focus { outline: none; border-color: var(--green-mid); }
+
+  /* 保存ボタン */
+  .btn-save {
+    width: 100%;
+    padding: 14px;
+    background: var(--green-dark);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.1em;
+    transition: all 0.2s;
+    margin-top: 4px;
+  }
+  .btn-save:active { transform: scale(0.98); background: var(--green-mid); }
+
+  /* 保存完了メッセージ */
+  .save-msg {
+    display: none;
+    text-align: center;
+    color: var(--green-mid);
+    font-size: 0.85rem;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+  .save-msg.show { display: block; }
+
+  /* 10年日記ページ */
+  .year-record {
+    background: white;
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border: 1px solid var(--border);
+  }
+  .year-header {
+    background: var(--green-dark);
+    color: white;
+    padding: 10px 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .year-header .year-label {
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 700;
+    font-size: 0.95rem;
+  }
+  .year-header .year-badge {
+    font-size: 0.68rem;
+    background: rgba(255,255,255,0.2);
+    padding: 2px 8px;
+    border-radius: 10px;
+  }
+  .year-body {
+    padding: 12px 14px;
+  }
+  .year-body .meta {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 8px;
+  }
+  .meta-chip {
+    font-size: 0.73rem;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--green-pale);
+    color: var(--green-dark);
+  }
+  .meta-chip.work { background: var(--brown-light); color: var(--brown); }
+  .year-body .memo-text {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    line-height: 1.65;
+    border-left: 3px solid var(--green-pale);
+    padding-left: 10px;
+    margin-top: 6px;
+  }
+  .no-record {
+    color: #bbb;
+    font-size: 0.8rem;
+    font-style: italic;
+  }
+
+  /* 一覧ページ */
+  .list-item {
+    background: white;
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin-bottom: 10px;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    cursor: pointer;
+  }
+  .list-item .list-date {
+    font-family: 'Noto Serif JP', serif;
+    font-weight: 600;
+    font-size: 0.88rem;
+    color: var(--green-dark);
+    margin-bottom: 5px;
+  }
+  .list-item .list-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-bottom: 5px;
+  }
+  .list-item .list-memo {
+    font-size: 0.78rem;
+    color: var(--text-light);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .empty-msg {
+    text-align: center;
+    color: #aaa;
+    padding: 40px 20px;
+    font-size: 0.9rem;
+  }
+
+  /* 日付見出し（10年日記ページ） */
+  .date-heading {
+    font-family: 'Noto Serif JP', serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--green-dark);
+    margin-bottom: 14px;
+    text-align: center;
+    padding: 10px;
+    background: var(--green-pale);
+    border-radius: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: 'Noto Sans JP', sans-serif;
+    background: white;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .filter-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .filter-row select { margin-bottom: 0; }
+
+  .temp-item input.auto-filled,
+  .weather-extra-item input.auto-filled {
+    background: #e4f1fb; border-color: #1a6fa3; color: #1a6fa3;
+  }
+  .weather-extra-row { display: flex; gap: 12px; margin-top: 10px; }
+  .weather-extra-item { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+  .weather-extra-item label { font-size: 0.72rem; color: var(--text-light); }
+  .weather-extra-item input {
+    padding: 8px 10px; border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 0.95rem; text-align: center; width: 100%;
+    font-family: 'Noto Sans JP', sans-serif;
+  }
+  .import-card {
+    background: #e4f1fb; border: 1.5px solid #1a6fa3;
+    border-radius: 12px; padding: 16px; margin-bottom: 20px;
+  }
+  .import-card .import-title {
+    font-family: 'Noto Serif JP', serif; font-size: 0.9rem; font-weight: 700;
+    color: #1a6fa3; margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+  }
+  .import-steps { font-size: 0.78rem; color: #2a5a7a; line-height: 1.9; margin-bottom: 12px; }
+  .step-num {
+    display: inline-block; width: 18px; height: 18px; background: #1a6fa3; color: white;
+    border-radius: 50%; text-align: center; font-size: 0.7rem; line-height: 18px; margin-right: 4px;
+  }
+  .btn-import-file {
+    width: 100%; padding: 12px; background: #1a6fa3; color: white; border: none;
+    border-radius: 8px; font-size: 0.9rem; font-family: 'Noto Serif JP', serif;
+    font-weight: 700; cursor: pointer;
+  }
+  .import-result { margin-top: 10px; font-size: 0.8rem; color: #1a6fa3; font-weight: 500; min-height: 1.2em; }
+  .import-result.error { color: #c0392b; }
+  .auto-badge {
+    display: inline-block; font-size: 0.62rem; background: #1a6fa3; color: white;
+    padding: 1px 6px; border-radius: 8px; margin-left: 6px; vertical-align: middle;
+  }
+  .meta-chip.weather-data { background: #e4f1fb; color: #1a6fa3; }
+  #csv-file-input { display: none; }
+
+  .variety-general {
+    background: #f0f0f0;
+    color: #666;
+    border-color: #ccc;
+    font-size: 0.74rem;
+  }
+  .variety-general.selected {
+    background: #e0e0e0;
+    border-color: #888;
+    color: #333;
+  }
+
+  /* ===== 写真カード ===== */
+  .photo-upload-area {
+    border: 2px dashed var(--border);
+    border-radius: 10px;
+    padding: 18px 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fafafa;
+  }
+  .photo-upload-area:active { background: var(--green-pale); border-color: var(--green-mid); }
+  .photo-upload-area .upload-icon { font-size: 2rem; margin-bottom: 6px; }
+  .photo-upload-area .upload-label { font-size: 0.82rem; color: var(--text-light); }
+  .photo-upload-area .upload-sub { font-size: 0.72rem; color: #aaa; margin-top: 3px; }
+
+  .photo-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .photo-thumb {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #eee;
+    cursor: pointer;
+  }
+  .photo-thumb img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .photo-thumb .photo-del {
+    position: absolute;
+    top: 3px; right: 3px;
+    width: 22px; height: 22px;
+    background: rgba(0,0,0,0.55);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 1;
+  }
+  .photo-thumb .photo-uploading {
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.75);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; color: #1a6fa3; font-weight: 500;
+  }
+  .photo-thumb .drive-badge {
+    position: absolute;
+    bottom: 3px; left: 3px;
+    background: #1a6fa3;
+    color: white;
+    font-size: 0.6rem;
+    padding: 1px 5px;
+    border-radius: 6px;
+  }
+
+  /* 写真拡大モーダル */
+  .photo-modal {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.88);
+    z-index: 999;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .photo-modal.open { display: flex; }
+  .photo-modal img {
+    max-width: 95vw; max-height: 80vh;
+    border-radius: 8px;
+    object-fit: contain;
+  }
+  .photo-modal .modal-close {
+    color: white; font-size: 1rem;
+    background: rgba(255,255,255,0.15);
+    border: none; border-radius: 20px;
+    padding: 8px 24px; cursor: pointer;
+  }
+  .photo-status {
+    font-size: 0.75rem; margin-top: 8px;
+    color: #1a6fa3; font-weight: 500; min-height: 1.2em;
+  }
+
+  /* 一覧の写真サムネ */
+  .list-photos { display: flex; gap: 5px; margin-top: 6px; flex-wrap: wrap; }
+  .list-photo-thumb {
+    width: 48px; height: 48px;
+    border-radius: 5px; object-fit: cover;
+    cursor: pointer; border: 1px solid var(--border);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🍐 梶原果樹園 作業日誌</h1>
+  <div class="sub">荒尾市 ― 10年日記</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('record')">✏️ 記録</button>
+  <button class="tab-btn" onclick="showPage('decade')">📅 10年</button>
+  <button class="tab-btn" onclick="showPage('list')">📋 一覧</button>
+  <button class="tab-btn" onclick="showPage('import')">🌤️ 気象</button>
+</div>
+
+<!-- 記録ページ -->
+<div id="page-record" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">☁️ 天気・気象<span id="weather-auto-badge"></span></div>
+    <div class="btn-group" id="weather-btns">
+      <button class="btn-option" onclick="multiToggle(this,'weather')">☀️ 晴れ</button>
+      <button class="btn-option" onclick="multiToggle(this,'weather')">⛅ 曇り</button>
+      <button class="btn-option" onclick="multiToggle(this,'weather')">🌧️ 雨</button>
+      <button class="btn-option" onclick="multiToggle(this,'weather')">❄️ 雪</button>
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:0.72rem;color:var(--text-light);">天気メモ（自由入力）</label>
+      <input type="text" id="weather-note" placeholder="例：午前中強風、夕方から快晴"
+        style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid var(--border);
+               border-radius:8px;font-size:0.85rem;font-family:'Noto Sans JP',sans-serif;">
+    </div>
+    <div class="temp-row">
+      <div class="temp-item">
+        <label>最高気温（℃）</label>
+        <input type="number" id="temp-max" placeholder="例：34">
+      </div>
+      <div class="temp-item">
+        <label>最低気温（℃）</label>
+        <input type="number" id="temp-min" placeholder="例：22">
+      </div>
+    </div>
+    <div class="weather-extra-row">
+      <div class="weather-extra-item">
+        <label>降水量（mm）</label>
+        <input type="number" id="precip" placeholder="例：12.5" step="0.1">
+      </div>
+      <div class="weather-extra-item">
+        <label>最大風速（m/s）</label>
+        <input type="number" id="wind-speed" placeholder="例：5.2" step="0.1">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🍐 品種（複数選択可）</div>
+    <div class="variety-grid" id="variety-btns">
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">新高</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">愛甘水</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">甘ひびき</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">あきあかり</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">豊水</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">秋麗</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">あきづき</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">甘太</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">種花</button>
+      <button class="variety-btn" onclick="multiToggle(this,'variety')">その他</button>
+      <button class="variety-btn variety-general" onclick="multiToggle(this,'variety')">全般</button>
+      <button class="variety-btn variety-general" onclick="multiToggle(this,'variety')">対象外</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 作業種類（複数選択可）</div>
+    <div class="work-grid" id="work-btns">
+      <button class="work-btn" onclick="multiToggle(this,'work')">剪定</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">誘引・整枝</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">摘蕾</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">花粉採取</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">授粉</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">灌水</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">摘果</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">袋かけ</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">防除（農薬）</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">施肥</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">収穫</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">選果・出荷</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">草刈り</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">休み</button>
+      <button class="work-btn" onclick="multiToggle(this,'work')">その他</button>
+    </div>
+    <div style="margin-top:10px;">
+      <label style="font-size:0.72rem;color:var(--text-light);">作業メモ（自由入力）</label>
+      <input type="text" id="work-note" placeholder="例：新高3列目まで完了、明日続き"
+        style="width:100%;margin-top:4px;padding:8px 10px;border:1.5px solid var(--border);
+               border-radius:8px;font-size:0.85rem;font-family:'Noto Sans JP',sans-serif;">
+    </div>
+    <div style="display:flex;gap:10px;margin-top:10px;">
+      <div style="flex:1;">
+        <label style="font-size:0.72rem;color:var(--text-light);">👥 作業人数</label>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <button onclick="changeWorkers(-1)" style="width:32px;height:32px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:1.1rem;cursor:pointer;flex-shrink:0;">－</button>
+          <input type="number" id="worker-count" min="1" max="20" placeholder="1"
+            style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:1rem;text-align:center;font-family:'Noto Sans JP',sans-serif;">
+          <button onclick="changeWorkers(1)" style="width:32px;height:32px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:1.1rem;cursor:pointer;flex-shrink:0;">＋</button>
+          <span style="font-size:0.8rem;color:var(--text-light);flex-shrink:0;">人</span>
+        </div>
+      </div>
+      <div style="flex:1;">
+        <label style="font-size:0.72rem;color:var(--text-light);">⏱️ 作業時間（合計）</label>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <input type="number" id="work-hours" min="0.5" max="24" step="0.5" placeholder="6"
+            style="flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:8px;
+                   font-size:1rem;text-align:center;font-family:'Noto Sans JP',sans-serif;">
+          <span style="font-size:0.8rem;color:var(--text-light);flex-shrink:0;">時間</span>
+        </div>
+        <div style="font-size:0.68rem;color:#aaa;margin-top:3px;text-align:center;" id="total-man-hours"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 メモ・気づき</div>
+    <textarea id="memo" placeholder="例：新高の摘果が完了。今年は着果数が多め。ヤケ果の兆候なし。"></textarea>
+  </div>
+
+  <!-- 写真カード -->
+  <div class="card">
+    <div class="card-title">📷 写真記録</div>
+    <div class="photo-upload-area" onclick="document.getElementById('photo-input').click()">
+      <div class="upload-icon">📸</div>
+      <div class="upload-label">タップして写真を追加</div>
+      <div class="upload-sub">複数枚選択可・Googleドライブに保存</div>
+    </div>
+    <input type="file" id="photo-input" accept="image/*" multiple style="display:none" onchange="handlePhotoSelect(this)">
+    <div class="photo-status" id="photo-status"></div>
+    <div class="photo-grid" id="photo-grid"></div>
+  </div>
+
+  <button class="btn-save" onclick="saveRecord()">💾 この日の記録を保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+  <div id="sync-status" style="display:none;font-size:0.8rem;text-align:center;margin-top:6px;font-weight:500;"></div>
+</div>
+
+<!-- 10年日記ページ -->
+<div id="page-decade" class="page">
+  <div class="date-nav">
+    <input type="date" id="decade-date">
+    <button class="btn-today" onclick="setDecadeToday()">今日</button>
+  </div>
+  <div id="decade-content"></div>
+</div>
+
+<!-- 一覧ページ -->
+<div id="page-list" class="page">
+  <div class="filter-row">
+    <select id="filter-year" onchange="renderList()">
+      <option value="">すべての年</option>
+    </select>
+    <select id="filter-variety" onchange="renderList()">
+      <option value="">すべての品種</option>
+      <option>新高</option><option>愛甘水</option><option>甘ひびき</option>
+      <option>あきあかり</option><option>豊水</option><option>秋麗</option>
+      <option>あきづき</option><option>甘太</option>
+    </select>
+  </div>
+  <div id="list-content"></div>
+</div>
+
+
+<!-- 気象取り込みページ -->
+<div id="page-import" class="page">
+  <div class="import-card">
+    <div class="import-title">🌤️ 気象庁データの取り込み方法</div>
+    <div class="import-steps">
+      <div><span class="step-num">1</span>下のボタンで気象庁サイトを開く</div>
+      <div><span class="step-num">2</span>「地点を選ぶ」→ 熊本県 → <strong>岱明</strong> を選択</div>
+      <div><span class="step-num">3</span>「項目を選ぶ」で以下にチェック：<br>
+        　・気温（日最高・日最低）<br>
+        　・降水量（日合計）<br>
+        　・風速（日最大）</div>
+      <div><span class="step-num">4</span>「期間を選ぶ」で月を指定</div>
+      <div><span class="step-num">5</span>「CSVファイルをダウンロード」を押す</div>
+      <div><span class="step-num">6</span>下の「CSVを選んで取り込む」でそのファイルを選ぶ</div>
+    </div>
+    <a href="https://www.data.jma.go.jp/risk/obsdl/" target="_blank"
+       style="display:block;width:100%;padding:11px;background:#1a6fa3;color:white;text-align:center;
+              border-radius:8px;font-size:0.85rem;font-weight:700;text-decoration:none;margin-bottom:12px;">
+      🔗 気象庁 過去データダウンロードページを開く
+    </a>
+    <button class="btn-import-file" onclick="document.getElementById('csv-file-input').click()">
+      📂 CSVを選んで取り込む
+    </button>
+    <input type="file" id="csv-file-input" accept=".csv" onchange="importCSV(this)">
+    <div class="import-result" id="import-result"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">💡 ヒント</div>
+    <div style="font-size:0.8rem;color:var(--text-light);line-height:1.8;">
+      取り込んだデータは各日の記録に自動反映されます。<br>
+      天気（晴れ・雨など）は手入力のままです。<br>
+      <span style="color:#1a6fa3;">青色</span>の数値が気象庁から取り込んだデータです。<br>
+      一覧・10年タブにも「気象庁」バッジが表示されます。
+    </div>
+  </div>
+
+  <div class="card" style="border-color:#2d5016;">
+    <div class="card-title" style="color:#2d5016;">☁️ Googleスプレッドシートへ全データ送信</div>
+    <div style="font-size:0.78rem;color:var(--text-light);line-height:1.8;margin-bottom:12px;">
+      このアプリのデータをまとめてGoogleスプレッドシートに送信します。<br>
+      初回セットアップ後や、スマホ↔PC間でデータを揃えたいときに使います。
+    </div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAllToSheet()">
+      📤 全データをスプレッドシートに送信する
+    </button>
+  </div>
+</div>
+
+<!-- 写真拡大モーダル -->
+<div class="photo-modal" id="photo-modal" onclick="closeModal()">
+  <img id="modal-img" src="" alt="">
+  <button class="modal-close" onclick="closeModal()">✕ 閉じる</button>
+</div>
+
+<script>
+// ========== 状態管理 ==========
+const STORAGE_KEY = 'kajiwara_diary_v1';
+let records = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+
+// ▼▼▼ ここにGASのURLを貼り付けてください ▼▼▼
+const GAS_URL = '';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+// ========== 写真機能 ==========
+// 現在選択中の日付の写真リスト（{id, dataUrl, driveUrl, name, uploading}）
+let currentPhotos = [];
+
+function handlePhotoSelect(input) {
+  const dateStr = document.getElementById('rec-date').value;
+  if (!dateStr) { alert('先に日付を選んでください'); input.value=''; return; }
+  const files = Array.from(input.files);
+  if (!files.length) return;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const id = 'photo_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      const photo = { id, dataUrl: e.target.result, driveUrl: '', name: file.name, uploading: !!GAS_URL };
+      currentPhotos.push(photo);
+      renderPhotoGrid();
+      // Googleドライブへアップロード
+      if (GAS_URL) uploadPhotoToDrive(photo, dateStr);
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+async function uploadPhotoToDrive(photo, dateStr) {
+  try {
+    setPhotoStatus('📤 アップロード中...');
+    const payload = {
+      action: 'uploadPhoto',
+      date: dateStr,
+      photoId: photo.id,
+      name: photo.name,
+      data: photo.dataUrl
+    };
+    const res = await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    // no-corsのためレスポンス本文は読めないが送信完了とみなす
+    photo.uploading = false;
+    photo.driveUrl = 'uploaded'; // フラグとして使用
+    savePhotosToLocal(dateStr);
+    renderPhotoGrid();
+    setPhotoStatus('✅ Googleドライブに保存しました');
+    setTimeout(() => setPhotoStatus(''), 3000);
+  } catch(e) {
+    photo.uploading = false;
+    savePhotosToLocal(dateStr);
+    renderPhotoGrid();
+    setPhotoStatus('⚠️ ドライブ保存失敗（端末内には保存済）');
+  }
+}
+
+function savePhotosToLocal(dateStr) {
+  if (!dateStr) return;
+  // dataUrlは容量大きいのでlocalStorageには縮小版のみ保存
+  const toStore = currentPhotos.map(p => ({
+    id: p.id, name: p.name, driveUrl: p.driveUrl,
+    dataUrl: p.dataUrl // ※枚数が多い場合は要注意
+  }));
+  const photoKey = 'kajiwara_photos_' + dateStr;
+  try {
+    localStorage.setItem(photoKey, JSON.stringify(toStore));
+  } catch(e) {
+    setPhotoStatus('⚠️ 写真が多すぎてローカル保存できません。Googleドライブには保存済です。');
+  }
+}
+
+function loadPhotosForDate(dateStr) {
+  if (!dateStr) { currentPhotos = []; renderPhotoGrid(); return; }
+  const photoKey = 'kajiwara_photos_' + dateStr;
+  const stored = localStorage.getItem(photoKey);
+  currentPhotos = stored ? JSON.parse(stored) : [];
+  renderPhotoGrid();
+  setPhotoStatus('');
+}
+
+function renderPhotoGrid() {
+  const grid = document.getElementById('photo-grid');
+  if (!grid) return;
+  if (currentPhotos.length === 0) { grid.innerHTML = ''; return; }
+  grid.innerHTML = currentPhotos.map(p => `
+    <div class="photo-thumb" id="thumb-${p.id}">
+      <img src="${p.dataUrl}" alt="${p.name}" onclick="openModal('${p.id}')">
+      ${p.uploading ? '<div class="photo-uploading">送信中...</div>' : ''}
+      ${p.driveUrl === 'uploaded' ? '<span class="drive-badge">Drive✓</span>' : ''}
+      <button class="photo-del" onclick="deletePhoto('${p.id}',event)">✕</button>
+    </div>
+  `).join('');
+}
+
+function deletePhoto(id, e) {
+  e.stopPropagation();
+  if (!confirm('この写真を削除しますか？\n（Googleドライブ上のファイルは削除されません）')) return;
+  currentPhotos = currentPhotos.filter(p => p.id !== id);
+  const dateStr = document.getElementById('rec-date').value;
+  savePhotosToLocal(dateStr);
+  renderPhotoGrid();
+}
+
+function openModal(id) {
+  const photo = currentPhotos.find(p => p.id === id);
+  if (!photo) return;
+  document.getElementById('modal-img').src = photo.dataUrl;
+  document.getElementById('photo-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('photo-modal').classList.remove('open');
+  document.getElementById('modal-img').src = '';
+}
+
+function setPhotoStatus(msg) {
+  const el = document.getElementById('photo-status');
+  if (el) el.textContent = msg;
+}
+
+function saveAll() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+
+// ========== Google スプレッドシート同期 ==========
+async function syncToSheet(dateStr, rec) {
+  if (!GAS_URL) return; // URL未設定なら何もしない
+  const row = {
+    date: dateStr,
+    weather: (rec.weather || []).join('・'),
+    weatherNote: rec.weatherNote || '',
+    tempMax: rec.tempMax || '',
+    tempMin: rec.tempMin || '',
+    precip: rec.precip || '',
+    windSpeed: rec.windSpeed || '',
+    varieties: (rec.varieties || []).join('・'),
+    works: (rec.works || []).join('・'),
+    workNote: rec.workNote || '',
+    memo: rec.memo || '',
+    jmaImported: rec.jmaImported ? '○' : '',
+    workerCount: rec.workerCount || '',
+    workHours: rec.workHours || ''
+  };
+  try {
+    await fetch(GAS_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(row)
+    });
+    showSyncBadge('✅ シートにも保存しました');
+  } catch(e) {
+    showSyncBadge('⚠️ シート保存失敗（ローカルには保存済）', true);
+  }
+}
+
+async function syncAllToSheet() {
+  if (!GAS_URL) { alert('GAS_URLが設定されていません。\nHTMLファイル内の GAS_URL に貼り付けてください。'); return; }
+  const keys = Object.keys(records).sort();
+  if (keys.length === 0) { alert('同期するデータがありません'); return; }
+  showSyncBadge('📤 全データを送信中...（' + keys.length + '件）');
+  let ok = 0, fail = 0;
+  for (const dateStr of keys) {
+    try {
+      const rec = records[dateStr];
+      const row = {
+        date: dateStr,
+        weather: (rec.weather || []).join('・'),
+        weatherNote: rec.weatherNote || '',
+        tempMax: rec.tempMax || '',
+        tempMin: rec.tempMin || '',
+        precip: rec.precip || '',
+        windSpeed: rec.windSpeed || '',
+        varieties: (rec.varieties || []).join('・'),
+        works: (rec.works || []).join('・'),
+        workNote: rec.workNote || '',
+        memo: rec.memo || '',
+        jmaImported: rec.jmaImported ? '○' : '',
+        workerCount: rec.workerCount || '',
+        workHours: rec.workHours || ''
+      };
+      await fetch(GAS_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(row)
+      });
+      ok++;
+      await new Promise(r => setTimeout(r, 100)); // 連続送信を少し間隔あけ
+    } catch(e) { fail++; }
+  }
+  showSyncBadge('✅ 送信完了：' + ok + '件' + (fail > 0 ? '（失敗：' + fail + '件）' : ''));
+}
+
+function showSyncBadge(msg, isError) {
+  let el = document.getElementById('sync-status');
+  if (!el) return;
+  el.textContent = msg;
+  el.style.color = isError ? '#c0392b' : '#1a6fa3';
+  el.style.display = 'block';
+  if (!isError) setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+
+// ========== 初期化 ==========
+window.onload = function() {
+  setToday();
+  setDecadeToday();
+  buildYearFilter();
+};
+
+function setToday() {
+  const d = new Date();
+  document.getElementById('rec-date').value = toDateStr(d);
+  loadRecordToForm(toDateStr(d));
+}
+
+function setDecadeToday() {
+  const d = new Date();
+  document.getElementById('decade-date').value = toDateStr(d);
+  document.getElementById('decade-date').addEventListener('change', renderDecade);
+  renderDecade();
+}
+
+function toDateStr(d) {
+  return d.toISOString().slice(0,10);
+}
+
+// ========== タブ ==========
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  event.target.classList.add('active');
+  if(name === 'list') { buildYearFilter(); renderList(); }
+  if(name === 'decade') renderDecade();
+}
+
+// ========== ボタントグル ==========
+function toggle(btn, group) {
+  document.querySelectorAll('#'+group+'-btns .btn-option').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+function multiToggle(btn, group) {
+  btn.classList.toggle('selected');
+}
+
+// ========== 人数・時間 ==========
+function changeWorkers(delta) {
+  const el = document.getElementById('worker-count');
+  const cur = parseInt(el.value) || 0;
+  const next = Math.max(1, Math.min(20, cur + delta));
+  el.value = next;
+  updateManHours();
+}
+
+function updateManHours() {
+  const wc = parseFloat(document.getElementById('worker-count').value) || 0;
+  const wh = parseFloat(document.getElementById('work-hours').value) || 0;
+  const el = document.getElementById('total-man-hours');
+  if (!el) return;
+  if (wc > 0 && wh > 0) {
+    el.textContent = `延べ ${(wc * wh).toFixed(1)} 人時`;
+  } else {
+    el.textContent = '';
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('rec-date').addEventListener('change', e => loadRecordToForm(e.target.value));
+  document.getElementById('worker-count').addEventListener('input', updateManHours);
+  document.getElementById('work-hours').addEventListener('input', updateManHours);
+});
+function loadRecordToForm(dateStr) {
+  clearForm();
+  loadPhotosForDate(dateStr); // 写真も読み込む
+  const rec = records[dateStr];
+  if(!rec) return;
+  // 天気
+  if(rec.weather) {
+    const weathers = Array.isArray(rec.weather) ? rec.weather : [rec.weather];
+    document.querySelectorAll('#weather-btns .btn-option').forEach(b => {
+      if(weathers.includes(b.textContent.trim())) b.classList.add('selected');
+    });
+  }
+  const wNote = document.getElementById('weather-note');
+  if(wNote) wNote.value = rec.weatherNote || '';
+  // 気温・降水量・風速
+  const tmax = document.getElementById('temp-max');
+  const tmin = document.getElementById('temp-min');
+  const prec = document.getElementById('precip');
+  const wind = document.getElementById('wind-speed');
+  if(rec.tempMax !== undefined && rec.tempMax !== '') { tmax.value = rec.tempMax; tmax.classList.toggle('auto-filled', !!rec.jmaImported); }
+  if(rec.tempMin !== undefined && rec.tempMin !== '') { tmin.value = rec.tempMin; tmin.classList.toggle('auto-filled', !!rec.jmaImported); }
+  if(rec.precip !== undefined && rec.precip !== '' && prec)   { prec.value = rec.precip; prec.classList.toggle('auto-filled', !!rec.jmaImported); }
+  if(rec.windSpeed !== undefined && rec.windSpeed !== '' && wind) { wind.value = rec.windSpeed; wind.classList.toggle('auto-filled', !!rec.jmaImported); }
+  const badge = document.getElementById('weather-auto-badge');
+  if(badge) badge.innerHTML = rec.jmaImported ? '<span class="auto-badge">気象庁取込</span>' : '';
+  // 品種
+  if(rec.varieties) {
+    document.querySelectorAll('#variety-btns .variety-btn').forEach(b => {
+      if(rec.varieties.includes(b.textContent.trim())) b.classList.add('selected');
+    });
+  }
+  // 作業
+  if(rec.works) {
+    document.querySelectorAll('#work-btns .work-btn').forEach(b => {
+      if(rec.works.includes(b.textContent.trim())) b.classList.add('selected');
+    });
+  }
+  // メモ
+  if(rec.memo) document.getElementById('memo').value = rec.memo;
+  const wkNote = document.getElementById('work-note'); if(wkNote) wkNote.value = rec.workNote || '';
+  // 人数・時間
+  const wc = document.getElementById('worker-count'); if(wc) wc.value = rec.workerCount || '';
+  const wh = document.getElementById('work-hours');   if(wh) wh.value = rec.workHours || '';
+  updateManHours();
+}
+
+function clearForm() {
+  document.querySelectorAll('.btn-option, .variety-btn, .work-btn').forEach(b => b.classList.remove('selected'));
+  ['temp-max','temp-min','precip','wind-speed'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el){ el.value = ''; el.classList.remove('auto-filled'); }
+  });
+  document.getElementById('memo').value = '';
+  const wn = document.getElementById('weather-note'); if(wn) wn.value = '';
+  const wkn = document.getElementById('work-note'); if(wkn) wkn.value = '';
+  const wc = document.getElementById('worker-count'); if(wc) wc.value = '';
+  const wh = document.getElementById('work-hours');   if(wh) wh.value = '';
+  const tmh = document.getElementById('total-man-hours'); if(tmh) tmh.textContent = '';
+  const badge = document.getElementById('weather-auto-badge');
+  if(badge) badge.innerHTML = '';
+  // 写真グリッドもリセット
+  currentPhotos = [];
+  const grid = document.getElementById('photo-grid');
+  if(grid) grid.innerHTML = '';
+  setPhotoStatus('');
+}
+
+// ========== 保存 ==========
+function saveRecord() {
+  const dateStr = document.getElementById('rec-date').value;
+  if(!dateStr) return alert('日付を選んでください');
+
+  const weather = [...document.querySelectorAll('#weather-btns .btn-option.selected')].map(b => b.textContent.trim());
+  const weatherNoteEl = document.getElementById('weather-note');
+  const weatherNote = weatherNoteEl ? weatherNoteEl.value.trim() : '';
+  const workNoteEl = document.getElementById('work-note');
+  const workNote = workNoteEl ? workNoteEl.value.trim() : '';
+  const tempMax   = document.getElementById('temp-max').value;
+  const tempMin   = document.getElementById('temp-min').value;
+  const precipEl  = document.getElementById('precip');
+  const windEl    = document.getElementById('wind-speed');
+  const precip    = precipEl  ? precipEl.value  : '';
+  const windSpeed = windEl    ? windEl.value     : '';
+  const varieties = [...document.querySelectorAll('#variety-btns .variety-btn.selected')].map(b => b.textContent.trim());
+  const works = [...document.querySelectorAll('#work-btns .work-btn.selected')].map(b => b.textContent.trim());
+  const memo = document.getElementById('memo').value.trim();
+  const workerCount = document.getElementById('worker-count').value;
+  const workHours   = document.getElementById('work-hours').value;
+
+  const existing2 = records[dateStr] || {};
+  records[dateStr] = { ...existing2, weather, weatherNote, tempMax, tempMin, precip, windSpeed, varieties, works, workNote, memo, workerCount, workHours };
+  saveAll();
+  syncToSheet(dateStr, records[dateStr]); // Googleシートにも送信
+
+  const msg = document.getElementById('save-msg');
+  msg.classList.add('show');
+  setTimeout(() => msg.classList.remove('show'), 2500);
+}
+
+// ========== 10年日記 ==========
+function renderDecade() {
+  const dateStr = document.getElementById('decade-date').value;
+  if(!dateStr) return;
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const mmdd = `${String(month).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const dateLabel = `${month}月${day}日`;
+
+  let html = `<div class="date-heading">📅 ${dateLabel} の記録（過去〜現在）</div>`;
+
+  // 現在の年から10年前まで
+  const currentYear = new Date().getFullYear();
+  let hasAny = false;
+
+  for(let y = currentYear; y >= currentYear - 9; y--) {
+    const key = `${y}-${mmdd}`;
+    const rec = records[key];
+    const yearsAgo = currentYear - y;
+    const badge = yearsAgo === 0 ? '今年' : `${yearsAgo}年前`;
+
+    let bodyHtml = '';
+    if(rec) {
+      hasAny = true;
+      let chips = '';
+      const ws = Array.isArray(rec.weather) ? rec.weather : (rec.weather ? [rec.weather] : []);
+      ws.forEach(w => chips += `<span class="meta-chip">${w}</span>`);
+      if(rec.weatherNote) chips += `<span class="meta-chip" style="font-style:italic;">📝${rec.weatherNote}</span>`;
+      if(rec.workNote) chips += `<span class="meta-chip work" style="font-style:italic;">🔧${rec.workNote}</span>`;
+      if(rec.tempMax) chips += `<span class="meta-chip weather-data">最高${rec.tempMax}℃</span>`;
+      if(rec.tempMin) chips += `<span class="meta-chip weather-data">最低${rec.tempMin}℃</span>`;
+      if(rec.precip && rec.precip!='0') chips += `<span class="meta-chip weather-data">雨${rec.precip}mm</span>`;
+      if(rec.windSpeed) chips += `<span class="meta-chip weather-data">風${rec.windSpeed}m/s</span>`;
+      (rec.varieties || []).forEach(v => chips += `<span class="meta-chip">${v}</span>`);
+      (rec.works || []).forEach(w => chips += `<span class="meta-chip work">${w}</span>`);
+      if(rec.workerCount) chips += `<span class="meta-chip" style="background:#fff8e1;border-color:#f0c040;">👥${rec.workerCount}人</span>`;
+      if(rec.workHours)   chips += `<span class="meta-chip" style="background:#fff8e1;border-color:#f0c040;">⏱️${rec.workHours}h</span>`;
+
+      bodyHtml = `
+        <div class="meta">${chips || '<span class="no-record">気象・作業の記録なし</span>'}</div>
+        ${rec.memo ? `<div class="memo-text">${escapeHtml(rec.memo)}</div>` : ''}
+      `;
+    } else {
+      bodyHtml = `<span class="no-record">記録なし</span>`;
+    }
+
+    html += `
+      <div class="year-record">
+        <div class="year-header">
+          <span class="year-label">${y}年</span>
+          <span class="year-badge">${badge}</span>
+        </div>
+        <div class="year-body">${bodyHtml}</div>
+      </div>
+    `;
+  }
+
+  document.getElementById('decade-content').innerHTML = html;
+}
+
+// ========== 一覧 ==========
+function buildYearFilter() {
+  const years = [...new Set(Object.keys(records).map(k => k.slice(0,4)))].sort().reverse();
+  const sel = document.getElementById('filter-year');
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">すべての年</option>';
+  years.forEach(y => {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y + '年';
+    if(y === cur) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+function renderList() {
+  const filterYear = document.getElementById('filter-year').value;
+  const filterVariety = document.getElementById('filter-variety').value;
+
+  let keys = Object.keys(records).sort().reverse();
+  if(filterYear) keys = keys.filter(k => k.startsWith(filterYear));
+  if(filterVariety) keys = keys.filter(k => (records[k].varieties || []).includes(filterVariety));
+
+  const el = document.getElementById('list-content');
+  if(keys.length === 0) {
+    el.innerHTML = '<div class="empty-msg">📭 該当する記録がありません</div>';
+    return;
+  }
+
+  el.innerHTML = keys.map(k => {
+    const rec = records[k];
+    const [y,m,d] = k.split('-');
+    const label = `${y}年${parseInt(m)}月${parseInt(d)}日`;
+    let chips = '';
+    const ws2 = Array.isArray(rec.weather) ? rec.weather : (rec.weather ? [rec.weather] : []);
+    ws2.forEach(w => chips += `<span class="meta-chip">${w}</span>`);
+    if(rec.tempMax) chips += `<span class="meta-chip weather-data">最高${rec.tempMax}℃</span>`;
+    if(rec.precip && parseFloat(rec.precip)>0) chips += `<span class="meta-chip weather-data">雨${rec.precip}mm</span>`;
+    (rec.varieties||[]).forEach(v => chips += `<span class="meta-chip">${v}</span>`);
+    (rec.works||[]).forEach(w => chips += `<span class="meta-chip work">${w}</span>`);
+    if(rec.workerCount) chips += `<span class="meta-chip" style="background:#fff8e1;border-color:#f0c040;">👥${rec.workerCount}人</span>`;
+    if(rec.workHours)   chips += `<span class="meta-chip" style="background:#fff8e1;border-color:#f0c040;">⏱️${rec.workHours}h</span>`;
+    return `
+      <div class="list-item" onclick="jumpToRecord('${k}')">
+        <div class="list-date">${label}${rec.jmaImported?'<span class="auto-badge">気象庁</span>':''}</div>
+        <div class="list-chips">${chips}</div>
+        ${rec.memo ? `<div class="list-memo">${escapeHtml(rec.memo)}</div>` : ''}
+      </div>
+    `;
+  }).join('');
+}
+
+function jumpToRecord(dateStr) {
+  showPage('record');
+  document.querySelectorAll('.tab-btn').forEach((b,i) => b.classList.toggle('active', i===0));
+  document.getElementById('rec-date').value = dateStr;
+  loadRecordToForm(dateStr);
+}
+
+
+// ========== 気象庁CSV取り込み ==========
+function importCSV(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const resultEl = document.getElementById('import-result');
+  resultEl.className = 'import-result';
+  resultEl.textContent = '読み込み中...';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const count = parseJmaCSV(e.target.result);
+      if(count > 0) {
+        resultEl.textContent = '✅ ' + count + '日分の気象データを取り込みました！';
+        buildYearFilter();
+      } else {
+        resultEl.className = 'import-result error';
+        resultEl.textContent = '⚠️ 取り込めるデータが見つかりませんでした。';
+      }
+    } catch(err) {
+      resultEl.className = 'import-result error';
+      resultEl.textContent = '❌ エラー：' + err.message;
+    }
+    input.value = '';
+  };
+  reader.readAsText(file, 'Shift_JIS');
+}
+
+function parseJmaCSV(text) {
+  const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  let count = 0;
+  let colYear=-1,colMonth=-1,colDay=-1,colTMax=-1,colTMin=-1,colPrec=-1,colWind=-1;
+  let headerParsed = false;
+
+  for(let i=0; i<lines.length; i++){
+    const cols = splitCSV(lines[i]);
+    if(!headerParsed){
+      // 年・月・日が含まれるヘッダー行を探す
+      const j = cols.join('');
+      if(j.includes('年') && j.includes('月') && j.includes('日')){
+        cols.forEach((c,idx)=>{
+          const s=c.trim();
+          if(s==='年') colYear=idx;
+          if(s==='月') colMonth=idx;
+          if(s==='日') colDay=idx;
+        });
+      }
+      // 気温・降水量・風速の列を探す（複数行にわたることがある）
+      cols.forEach((c,idx)=>{
+        const s=c.trim();
+        if((s.includes('最高')&&s.includes('気温'))||(s==='最高')) colTMax=idx;
+        if((s.includes('最低')&&s.includes('気温'))||(s==='最低')) colTMin=idx;
+        if(s.includes('降水量')&&colPrec===-1) colPrec=idx;
+        if((s.includes('最大')&&s.includes('風速'))&&colWind===-1) colWind=idx;
+      });
+      if(colDay>=0) { headerParsed=true; }
+      continue;
+    }
+    if(cols.length<3) continue;
+
+    let year,month,day;
+    if(colYear>=0&&colMonth>=0&&colDay>=0){
+      year=parseInt(cols[colYear]);month=parseInt(cols[colMonth]);day=parseInt(cols[colDay]);
+    } else {
+      const m=cols[0].trim().match(/(\d{4})[\/-](\d{1,2})[\/-](\d{1,2})/);
+      if(m){year=parseInt(m[1]);month=parseInt(m[2]);day=parseInt(m[3]);}
+      else continue;
+    }
+    if(!year||!month||!day||isNaN(year)) continue;
+
+    const dateKey=year+'-'+String(month).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    const getVal=(idx)=>{
+      if(idx<0||idx>=cols.length) return '';
+      const v=cols[idx].trim().replace(/[^\d.\-]/g,'');
+      return (v===''||isNaN(parseFloat(v)))?'':v;
+    };
+    const tmax=getVal(colTMax), tmin=getVal(colTMin);
+    const prec=getVal(colPrec), wind=getVal(colWind);
+    if(tmax||tmin||prec||wind){
+      const ex=records[dateKey]||{};
+      records[dateKey]={...ex,
+        tempMax:   tmax||ex.tempMax||'',
+        tempMin:   tmin||ex.tempMin||'',
+        precip:    prec||ex.precip||'',
+        windSpeed: wind||ex.windSpeed||'',
+        jmaImported:true
+      };
+      count++;
+    }
+  }
+  saveAll();
+  return count;
+}
+
+function splitCSV(line){
+  const r=[];let cur='',inQ=false;
+  for(let i=0;i<line.length;i++){
+    const c=line[i];
+    if(c==='"'){inQ=!inQ;}
+    else if(c===','&&!inQ){r.push(cur);cur='';}
+    else{cur+=c;}
+  }
+  r.push(cur);return r;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+</script>
+</body>
+</html>

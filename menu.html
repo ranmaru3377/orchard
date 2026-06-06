@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梶原果樹園 管理システム</title>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);min-height:100vh;}
+
+/* ヘッダー */
+header{background:var(--green);color:#fff;padding:20px 16px 18px;}
+.header-top{display:flex;align-items:center;gap:12px;}
+.header-icon{font-size:2rem;}
+.header-title{font-size:1.2rem;font-weight:700;letter-spacing:0.03em;}
+.header-sub{font-size:0.74rem;opacity:0.8;margin-top:3px;}
+.header-date{font-size:0.78rem;opacity:0.75;margin-top:10px;text-align:right;}
+
+/* 天気バナー */
+.season-banner{background:linear-gradient(135deg,#388e3c,#1b5e20);color:#fff;margin:14px 14px 0;border-radius:12px;padding:12px 14px;font-size:0.82rem;display:flex;align-items:center;gap:10px;}
+.season-banner .sb-icon{font-size:1.5rem;}
+.season-banner .sb-msg{line-height:1.6;}
+
+/* メニューグリッド */
+.section{padding:14px 14px 0;}
+.section-title{font-size:0.72rem;font-weight:700;color:var(--text-light);letter-spacing:0.08em;margin-bottom:10px;}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.app-card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:18px 14px;cursor:pointer;text-decoration:none;color:var(--text);display:block;transition:transform 0.1s,box-shadow 0.1s;position:relative;overflow:hidden;}
+.app-card:active{transform:scale(0.97);}
+.app-card .ac-icon{font-size:2rem;margin-bottom:8px;}
+.app-card .ac-name{font-size:0.9rem;font-weight:700;line-height:1.3;}
+.app-card .ac-desc{font-size:0.7rem;color:var(--text-light);margin-top:3px;line-height:1.4;}
+.app-card .ac-bar{position:absolute;top:0;left:0;right:0;height:4px;border-radius:14px 14px 0 0;}
+
+/* カラーバリエーション */
+.c-diary .ac-bar{background:#2d5016;}
+.c-bag .ac-bar{background:#1565c0;}
+.c-pollen .ac-bar{background:#c2185b;}
+.c-harvest .ac-bar{background:#e8870c;}
+.c-worker .ac-bar{background:#795548;}
+.c-pest .ac-bar{background:#c0392b;}
+.c-fert .ac-bar{background:#388e3c;}
+.c-map .ac-bar{background:#3a8a2a;}
+
+/* 設置手順カード */
+.setup-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;}
+.setup-title{font-size:0.82rem;font-weight:700;color:var(--green);margin-bottom:8px;}
+.setup-step{display:flex;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:0.78rem;line-height:1.6;align-items:flex-start;}
+.setup-step:last-child{border:none;}
+.step-num{background:var(--green);color:#fff;border-radius:50%;width:20px;height:20px;display:flex;align-items:center;justify-content:center;font-size:0.65rem;font-weight:700;flex-shrink:0;margin-top:1px;}
+.step-txt{color:var(--text-light);}
+.step-txt b{color:var(--text);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-top">
+    <div class="header-icon">🍐</div>
+    <div>
+      <div class="header-title">梶原果樹園</div>
+      <div class="header-sub">管理システム ― 荒尾市</div>
+    </div>
+  </div>
+  <div class="header-date" id="header-date"></div>
+</header>
+
+<div class="season-banner">
+  <div class="sb-icon" id="season-icon">🌱</div>
+  <div class="sb-msg" id="season-msg">読み込み中...</div>
+</div>
+
+<div class="section">
+  <div class="section-title" style="margin-top:16px;">📋 日常管理</div>
+  <div class="grid">
+    <a class="app-card c-diary" href="kajiwara_diary_v2.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">📔</div>
+      <div class="ac-name">作業日誌</div>
+      <div class="ac-desc">毎日の作業・天候・気象庁データ記録</div>
+    </a>
+    <a class="app-card c-worker" href="雇人管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">👷</div>
+      <div class="ac-name">雇人管理</div>
+      <div class="ac-desc">パート勤怠・給与計算・月別集計</div>
+    </a>
+  </div>
+
+  <div class="section-title">📍 園地・樹木</div>
+  <div class="grid">
+    <a class="app-card c-map" href="index.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🗺️</div>
+      <div class="ac-name">園地マップ</div>
+      <div class="ac-desc">樹木の位置・品種・作業進捗（家族で同期）</div>
+    </a>
+  </div>
+
+  <div class="section-title">🍐 栽培管理</div>
+  <div class="grid">
+    <a class="app-card c-pollen" href="花粉採取管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🌸</div>
+      <div class="ac-name">花粉採取管理</div>
+      <div class="ac-desc">採取・使用・在庫を枚数で管理</div>
+    </a>
+    <a class="app-card c-bag" href="bagging_app.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🛍️</div>
+      <div class="ac-name">袋かけ管理</div>
+      <div class="ac-desc">品種・園地別の袋かけ枚数と累計</div>
+    </a>
+    <a class="app-card c-harvest" href="収穫管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🍐</div>
+      <div class="ac-name">収穫管理</div>
+      <div class="ac-desc">コンテナ数・品種・園地別集計</div>
+    </a>
+  </div>
+
+  <div class="section-title">🧪 トレーサビリティ</div>
+  <div class="grid">
+    <a class="app-card c-pest" href="農薬散布管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🧪</div>
+      <div class="ac-name">農薬散布管理</div>
+      <div class="ac-desc">混用対応・使用回数・園地別記録</div>
+    </a>
+    <a class="app-card c-fert" href="施肥管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🌱</div>
+      <div class="ac-name">施肥管理</div>
+      <div class="ac-desc">肥料・施肥目的・方法・袋数管理</div>
+    </a>
+  </div>
+
+  <div class="section-title">📁 使い方</div>
+  <div class="setup-card">
+    <div class="setup-title">💡 このメニューをホーム画面に追加すると便利です</div>
+    <div class="setup-step"><div class="step-num">1</div><div class="step-txt">iPhoneの<b>Safari</b>でこのメニューを開く</div></div>
+    <div class="setup-step"><div class="step-num">2</div><div class="step-txt">共有ボタン → <b>「ホーム画面に追加」</b>でアプリのように起動できる</div></div>
+    <div class="setup-step"><div class="step-num">3</div><div class="step-txt">各アプリのデータは<b>その端末内に保存</b>されます（園地マップのみ家族で自動同期）</div></div>
+    <div class="setup-step"><div class="step-num">4</div><div class="step-txt">家族と記録を共有したい場合は、各アプリのGoogleスプレッドシート連携（GAS）設定が必要です</div></div>
+  </div>
+</div>
+
+<script>
+// 日付表示
+function updateDate(){
+  const now=new Date();
+  const days=['日','月','火','水','木','金','土'];
+  const str=`${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日（${days[now.getDay()]}）`;
+  document.getElementById('header-date').textContent=str;
+}
+
+// 季節メッセージ
+function updateSeason(){
+  const m=new Date().getMonth()+1;
+  const d=new Date().getDate();
+  const msgs=[
+    {months:[1],icon:'❄️',msg:'厳冬期。剪定作業の時期です。\n樹形を整えて来シーズンの準備を。'},
+    {months:[2],icon:'🌸',msg:'花粉採取・授粉の準備を始める時期です。\n馬次郎・ヤーリー・ネパールの開花状況を確認しましょう。'},
+    {months:[3],icon:'🌸',msg:'授粉・摘果の最盛期。\n花粉在庫と使用回数を花粉採取管理で確認を。'},
+    {months:[4],icon:'🌿',msg:'摘果・袋かけ準備の時期です。\n病害虫の初期防除もお忘れなく。'},
+    {months:[5],icon:'🛍️',msg:'袋かけ作業の本番です。\n品種ごとの進捗を袋かけ管理で記録しましょう。'},
+    {months:[6],icon:'🛍️',msg:'袋かけ後半戦。\n梅雨入り前後の黒星病・うどんこ病対策を農薬管理で記録を。'},
+    {months:[7],icon:'☀️',msg:'高温障害（ヤケ果）に注意。\n新高の摘袋タイミングを見極める時期です。'},
+    {months:[8],icon:'🍐',msg:'早生品種（愛甘水・甘ひびき）の収穫が始まります。\n収穫管理でコンテナ数を記録しましょう。'},
+    {months:[9],icon:'🍐',msg:'収穫最盛期。豊水・あきづき・新高の出荷本番です。\n収穫管理・作業日誌を欠かさずに。'},
+    {months:[10],icon:'🍂',msg:'収穫後のお礼肥の時期。\n施肥管理で品種・園地ごとの記録を。'},
+    {months:[11],icon:'🍂',msg:'収穫終了・剪定準備。\n今年の記録を振り返り来年の計画を立てましょう。'},
+    {months:[12],icon:'❄️',msg:'剪定作業の始まり。\n年間の作業日誌・農薬・施肥記録を整理しましょう。'},
+  ];
+  const s=msgs.find(x=>x.months.includes(m));
+  if(s){
+    document.getElementById('season-icon').textContent=s.icon;
+    document.getElementById('season-msg').textContent=s.msg;
+  }
+}
+
+updateDate();
+updateSeason();
+</script>
+</body>
+</html>

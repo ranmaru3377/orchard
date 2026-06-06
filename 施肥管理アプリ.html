@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梶原果樹園 施肥管理</title>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--brown:#795548;--brown-pale:#efebe9;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.8rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:9px 13px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.85rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=text],input[type=number]{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;opacity:0;transition:0.3s;}
+.save-msg.show{opacity:1;}
+.sync-status{font-size:0.78rem;text-align:center;margin-top:8px;font-weight:500;min-height:1.2em;color:var(--blue);}
+/* 肥料入力 */
+.fert-input-row{display:flex;gap:6px;margin-bottom:6px;}
+.fert-input-row input{flex:1;font-size:0.85rem;}
+.fert-suggest{margin-top:4px;}
+.fert-suggest .sg{display:inline-flex;align-items:center;margin:3px 4px 0 0;border:1.5px solid var(--brown);background:var(--brown-pale);border-radius:16px;font-size:0.82rem;overflow:hidden;}
+.fert-suggest .sg-pick{padding:6px 8px 6px 11px;cursor:pointer;color:var(--brown);}
+.fert-suggest .sg-del{padding:6px 9px;color:#bbb;cursor:pointer;border-left:1px solid var(--border);font-size:0.72rem;}
+/* 選択済み肥料 */
+.fert-badge{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;border-radius:8px;margin-bottom:6px;background:var(--brown-pale);border-left:4px solid var(--brown);}
+.fert-badge .fb-name{font-weight:600;flex:1;font-size:0.88rem;}
+.fert-badge .fb-bags{display:flex;align-items:center;gap:6px;}
+.fert-badge .fb-bags button{width:28px;height:28px;border:1.5px solid var(--border);border-radius:8px;background:#fff;font-size:1rem;cursor:pointer;}
+.fert-badge .fb-bags span{font-weight:700;font-size:1rem;min-width:30px;text-align:center;}
+.fert-badge .fb-del{color:#bbb;cursor:pointer;font-size:0.78rem;padding-left:4px;}
+.quick-add-btn{padding:4px 10px;border:1.5px solid var(--brown);background:#fff;color:var(--brown);border-radius:8px;font-size:0.78rem;cursor:pointer;font-family:inherit;}
+.selected-ferts{margin-top:10px;}
+/* 履歴 */
+.list-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;border-left:4px solid var(--brown);}
+.list-date{font-size:0.82rem;font-weight:700;color:var(--green);}
+.list-detail{font-size:0.8rem;color:var(--text);margin-top:4px;}
+.chip{display:inline-block;background:var(--green-pale);border-radius:6px;padding:2px 8px;font-size:0.74rem;margin:2px 3px 0 0;}
+.chip.brown{background:var(--brown-pale);color:var(--brown);}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #eee;}
+.summary-row .name{font-weight:600;font-size:0.88rem;}
+.summary-row .detail{font-size:0.74rem;color:var(--text-light);margin-top:2px;}
+.summary-row .v{font-weight:700;color:var(--brown);font-size:0.9rem;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🌱 梶原果樹園 施肥管理</h1>
+  <div class="sub">荒尾市 ― 施肥記録・トレーサビリティ</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
+  <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('summary',event)">📊 集計</button>
+</div>
+
+<!-- 入力ページ -->
+<div id="page-input" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📍 対象園地（複数選択できます）</div>
+    <div class="btn-group" id="field-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🎯 施肥目的</div>
+    <div class="btn-group" id="purpose-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🚜 施肥方法</div>
+    <div class="btn-group" id="method-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🌱 肥料（複数追加できます）</div>
+    <div class="fert-input-row">
+      <input type="text" id="fert-input" placeholder="肥料名を入力（過去の肥料が候補に出ます）" autocomplete="off" oninput="renderFertSuggest()" onfocus="renderFertSuggest()" onkeydown="if(event.key==='Enter'){event.preventDefault();addFertToList();}">
+      <button class="btn-today" onclick="addFertToList()">＋追加</button>
+    </div>
+    <div class="fert-suggest" id="fert-suggest"></div>
+    <div class="selected-ferts" id="selected-ferts"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 備考</div>
+    <input type="text" id="note" placeholder="例：収穫後お礼肥、根元周り散布">
+  </div>
+
+  <button class="btn-save" id="save-btn" onclick="saveRecord()">💾 保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+  <div class="sync-status" id="sync-status"></div>
+</div>
+
+<!-- 履歴ページ -->
+<div id="page-list" class="page">
+  <div id="list-content"></div>
+</div>
+
+<!-- 集計ページ -->
+<div id="page-summary" class="page">
+  <div class="card">
+    <div class="card-title">📅 対象年度・園地</div>
+    <div style="display:flex;gap:8px;">
+      <input type="number" id="summary-year" inputmode="numeric" style="flex:1;" oninput="renderSummary()">
+      <select id="summary-field" onchange="renderSummary()" style="flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.88rem;font-family:inherit;">
+        <option value="">全て</option>
+        <option value="自宅園">自宅園</option>
+        <option value="長洲園">長洲園</option>
+        <option value="新図園(畑)">新図園(畑)</option>
+        <option value="新図園(山)">新図園(山)</option>
+        <option value="全園">全園</option>
+      </select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title">🌱 肥料別 使用袋数（年度合計）</div>
+    <div id="summary-content"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">☁️ Googleスプレッドシート送信</div>
+    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
+    <div class="sync-status" id="sync-status2"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='kajiwara_fertilizer_v1';
+const FERT_KEY='kajiwara_fert_memory_v1';
+let records=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+let fertMemory=JSON.parse(localStorage.getItem(FERT_KEY)||'[]');
+
+// ▼▼▼ GASのURLを貼り付け（施肥シートに送信） ▼▼▼
+const GAS_URL='';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+const FIELDS=['長洲園','新図園(畑)','新図園(山)','自宅園','全園'];
+const PURPOSES=['元肥','追肥','お礼肥','葉面補給','その他'];
+const METHODS=['土壌散布','葉面散布','液肥','その他'];
+
+let selFields=[], selPurpose='', selMethod='';
+let selFerts=[]; // [{name, bags}]
+let editingId=null;
+
+function init(){
+  makeFieldBtns();
+  makeSingleBtns('purpose-btns',PURPOSES,v=>selPurpose=v);
+  makeSingleBtns('method-btns',METHODS,v=>selMethod=v);
+  renderFertSuggest();
+  renderSelectedFerts();
+  setToday();
+  document.getElementById('summary-year').value=new Date().getFullYear();
+}
+
+function makeSingleBtns(id,items,onSelect){
+  const c=document.getElementById(id);
+  items.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    b.onclick=()=>{c.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');onSelect(v);};
+    c.appendChild(b);
+  });
+}
+
+function makeFieldBtns(){
+  const c=document.getElementById('field-btns');
+  FIELDS.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    b.onclick=()=>{
+      if(v==='全園'){
+        c.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));
+        b.classList.add('selected');selFields=['全園'];
+      }else{
+        const zen=[...c.querySelectorAll('.opt')].find(x=>x.textContent==='全園');
+        if(zen)zen.classList.remove('selected');
+        selFields=selFields.filter(f=>f!=='全園');
+        b.classList.toggle('selected');
+        if(b.classList.contains('selected'))selFields.push(v);
+        else selFields=selFields.filter(f=>f!==v);
+      }
+    };
+    c.appendChild(b);
+  });
+}
+
+// 肥料オートコンプリート
+function renderFertSuggest(){
+  const c=document.getElementById('fert-suggest');
+  const q=document.getElementById('fert-input').value.trim();
+  let cand=fertMemory.filter(name=>!selFerts.some(f=>f.name===name));
+  if(q)cand=cand.filter(name=>name.includes(q));
+  if(cand.length===0){c.innerHTML='';return;}
+  c.innerHTML='';
+  c._cand=cand.slice(0,12);
+  c._cand.forEach((name,i)=>{
+    const wrap=document.createElement('span');wrap.className='sg';
+    const pick=document.createElement('span');pick.className='sg-pick';pick.textContent=name;
+    const del=document.createElement('span');del.className='sg-del';del.textContent='✕';
+    pick.onclick=()=>{document.getElementById('fert-input').value=name;addFertToList();};
+    del.onclick=(e)=>{e.stopPropagation();forgetFert(name);};
+    wrap.appendChild(pick);wrap.appendChild(del);
+    c.appendChild(wrap);
+  });
+}
+
+function forgetFert(name){
+  if(!confirm(`候補から「${name}」を削除しますか？\n（過去の記録は残ります）`))return;
+  fertMemory=fertMemory.filter(n=>n!==name);
+  localStorage.setItem(FERT_KEY,JSON.stringify(fertMemory));
+  renderFertSuggest();
+}
+
+function addFertToList(){
+  const input=document.getElementById('fert-input');
+  const name=input.value.trim();
+  if(!name)return;
+  if(selFerts.some(f=>f.name===name)){alert('この肥料はもう追加されています');return;}
+  selFerts.push({name,bags:1,unit:'袋'});
+  if(!fertMemory.includes(name)){
+    fertMemory.push(name);
+    localStorage.setItem(FERT_KEY,JSON.stringify(fertMemory));
+  }
+  input.value='';
+  renderFertSuggest();
+  renderSelectedFerts();
+}
+
+function renderSelectedFerts(){
+  const c=document.getElementById('selected-ferts');
+  if(selFerts.length===0){
+    c.innerHTML='<div class="note" style="margin-top:8px;">↑ 肥料名を入力して追加してください</div>';
+    return;
+  }
+  c.innerHTML='<div style="font-size:0.74rem;color:var(--text-light);margin:8px 0 6px;">選択中（量と単位を調整）：</div>';
+  selFerts.forEach((f,i)=>{
+    const div=document.createElement('div');div.className='fert-badge';
+    div.innerHTML=`
+      <span class="fb-name">🌱${f.name}</span>
+      <span class="fb-bags">
+        <button onclick="changeBags(${i},-1)">－</button>
+        <span id="bags-${i}">${f.bags}</span>
+        <button onclick="changeBags(${i},1)">＋</button>
+        <select id="unit-${i}" onchange="changeUnit(${i},this.value)" style="padding:4px 6px;border:1.5px solid var(--border);border-radius:8px;font-size:0.82rem;font-family:inherit;background:#fff;">
+          <option value="袋" ${(f.unit||'袋')==='袋'?'selected':''}>袋</option>
+          <option value="kg" ${f.unit==='kg'?'selected':''}>kg</option>
+          <option value="cc" ${f.unit==='cc'?'selected':''}>㏄</option>
+        </select>
+      </span>
+      <div style="display:flex;gap:4px;margin-top:6px;">
+        <button class="quick-add-btn" onclick="changeBags(${i},5,true)">+5</button>
+        <button class="quick-add-btn" onclick="changeBags(${i},10,true)">+10</button>
+        <button class="quick-add-btn" onclick="changeBags(${i},50,true)">+50</button>
+        <span class="fb-del" onclick="removeFert(${i})" style="margin-left:auto;">✕削除</span>
+      </div>`;
+    c.appendChild(div);
+  });
+}
+
+function changeBags(i,delta,fixedStep){
+  const unit=selFerts[i].unit||'袋';
+  const step=fixedStep?delta:(unit==='cc'?50:unit==='kg'?0.5:1)*delta;
+  selFerts[i].bags=Math.max(unit==='cc'?50:unit==='kg'?0.5:1, Math.round((selFerts[i].bags+step)*10)/10);
+  const el=document.getElementById('bags-'+i);
+  if(el)el.textContent=selFerts[i].bags;
+}
+
+function changeUnit(i,val){
+  selFerts[i].unit=val;
+  // 単位が変わったら量を初期値にリセット
+  selFerts[i].bags=val==='cc'?100:val==='kg'?10:1;
+  renderSelectedFerts();
+}
+
+function removeFert(i){
+  selFerts.splice(i,1);
+  renderFertSuggest();
+  renderSelectedFerts();
+}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+  if(name==='summary')renderSummary();
+}
+
+function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  if(!date){alert('日付を選んでください');return;}
+  if(selFields.length===0){alert('対象園地を選んでください');return;}
+  if(selFerts.length===0){alert('肥料を追加してください');return;}
+  const rec={
+    id:editingId||Date.now(),date,
+    field:selFields.join('・'),
+    purpose:selPurpose,
+    method:selMethod,
+    ferts:selFerts.map(f=>({name:f.name,bags:f.bags,unit:f.unit||'袋'})),
+    note:document.getElementById('note').value.trim()
+  };
+  if(editingId){records=records.map(r=>r.id===editingId?rec:r);}
+  else{records.push(rec);}
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  syncOne(rec);
+  const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 保存する';btn.style.background='';
+  editingId=null;
+  selFerts=[];renderFertSuggest();renderSelectedFerts();
+  document.getElementById('note').value='';
+}
+
+function editRec(id){
+  const rec=records.find(r=>r.id===id);
+  if(!rec)return;
+  editingId=id;
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-input').classList.add('active');
+  document.querySelector('.tab-btn').classList.add('active');
+  document.getElementById('rec-date').value=rec.date;
+  selFields=(rec.field||'').split('・').filter(Boolean);
+  document.querySelectorAll('#field-btns .opt').forEach(b=>b.classList.toggle('selected',selFields.includes(b.textContent)));
+  selPurpose=rec.purpose||'';
+  document.querySelectorAll('#purpose-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selPurpose));
+  selMethod=rec.method||'';
+  document.querySelectorAll('#method-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selMethod));
+  selFerts=(rec.ferts||[]).map(f=>({name:f.name,bags:f.bags,unit:f.unit||'袋'}));
+  renderFertSuggest();renderSelectedFerts();
+  document.getElementById('note').value=rec.note||'';
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 この内容で更新する';btn.style.background='#1565c0';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+
+function delRec(id){
+  if(!confirm('この記録を削除しますか？'))return;
+  records=records.filter(r=>r.id!==id);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
+}
+
+function renderList(){
+  const el=document.getElementById('list-content');
+  if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
+  const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=sorted.map(r=>{
+    const[y,m,d]=r.date.split('-');
+    const fertHtml=(r.ferts||[]).map(f=>`<div class="list-detail"><b>🌱${f.name}</b> <span style="color:var(--brown)">${f.bags}${f.unit||'袋'}</span></div>`).join('');
+    let chips='';
+    if(r.purpose)chips+=`<span class="chip brown">${r.purpose}</span>`;
+    if(r.method)chips+=`<span class="chip">${r.method}</span>`;
+    return`<div class="list-item">
+      <div class="list-date">${y}年${+m}月${+d}日　${r.field}
+        <span style="float:right;display:flex;gap:10px;align-items:center;">
+          <span style="color:#1565c0;cursor:pointer;font-size:0.78rem;" onclick="editRec(${r.id})">✏️編集</span>
+          <span style="color:#ccc;cursor:pointer;" onclick="delRec(${r.id})">✕</span>
+        </span>
+      </div>
+      ${fertHtml}
+      ${chips?`<div class="list-detail" style="margin-top:4px">${chips}</div>`:''}
+      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderSummary(){
+  const yr=parseInt(document.getElementById('summary-year').value)||new Date().getFullYear();
+  const filterField=document.getElementById('summary-field').value;
+  const el=document.getElementById('summary-content');
+  const filtered=records.filter(r=>{
+    if(new Date(r.date).getFullYear()!==yr)return false;
+    if(!filterField)return true;
+    return(r.field||'').split('・').includes(filterField);
+  });
+  if(filtered.length===0){el.innerHTML='<div class="empty">この年度・園地の記録はありません</div>';return;}
+  const map={};
+  filtered.forEach(r=>{
+    (r.ferts||[]).forEach(f=>{
+      const unit=f.unit||'袋';
+      const key=f.name+'|'+unit;
+      if(!map[key])map[key]={name:f.name,unit,total:0,count:0,lastDate:''};
+      map[key].total+=f.bags;
+      map[key].count++;
+      if(r.date>map[key].lastDate)map[key].lastDate=r.date;
+    });
+  });
+  const arr=Object.values(map).sort((a,b)=>a.name.localeCompare(b.name));
+  el.innerHTML=arr.map(u=>{
+    const[,m,d]=u.lastDate.split('-');
+    return`<div class="summary-row">
+      <div><div class="name">🌱${u.name}</div><div class="detail">${u.count}回施肥　最終 ${+m}/${+d}</div></div>
+      <div class="v">${u.total}${u.unit}</div>
+    </div>`;
+  }).join('');
+}
+
+async function syncOne(rec){
+  if(!GAS_URL){setSync('sync-status','💾 端末に保存しました（シート未連携）');return;}
+  setSync('sync-status','📤 送信中...');
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sheet:'施肥',...rec,ferts:JSON.stringify(rec.ferts)})});
+    setSync('sync-status','✅ シートに送信しました');
+  }catch(e){setSync('sync-status','⚠️ 送信失敗（端末には保存済）');}
+}
+
+async function syncAll(){
+  if(!GAS_URL){alert('GAS_URLが設定されていません');return;}
+  if(records.length===0){alert('送信するデータがありません');return;}
+  setSync('sync-status2','📤 '+records.length+'件送信中...');
+  let ok=0;
+  for(const rec of records){
+    try{await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({sheet:'施肥',...rec,ferts:JSON.stringify(rec.ferts)})});ok++;await new Promise(r=>setTimeout(r,100));}catch(e){}
+  }
+  setSync('sync-status2','✅ '+ok+'件送信完了');
+}
+
+function setSync(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg;}
+
+init();
+</script>
+</body>
+</html>

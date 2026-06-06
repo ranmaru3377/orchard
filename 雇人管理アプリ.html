@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>梶原果樹園 雇人管理</title>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.82rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:8px 12px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.82rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+.opt-add{border-style:dashed;color:var(--text-light);}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=number],input[type=text],input[type=time],select{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.row2{display:flex;gap:10px;}
+.row2>div{flex:1;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;opacity:0;transition:0.3s;}
+.save-msg.show{opacity:1;}
+.sync-status{font-size:0.78rem;text-align:center;margin-top:8px;font-weight:500;min-height:1.2em;color:var(--blue);}
+.calc-display{background:var(--green-pale);border-radius:10px;padding:12px;margin-top:10px;}
+.calc-row{display:flex;justify-content:space-between;font-size:0.85rem;padding:3px 0;}
+.calc-row.total{border-top:1.5px solid var(--green-mid);margin-top:5px;padding-top:7px;font-weight:700;font-size:1.05rem;color:var(--green);}
+.list-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;}
+.list-date{font-size:0.82rem;font-weight:700;color:var(--green);}
+.list-detail{font-size:0.8rem;color:var(--text);margin-top:4px;}
+.chip{display:inline-block;background:var(--green-pale);border-radius:6px;padding:2px 8px;font-size:0.74rem;margin:2px 3px 0 0;}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee;}
+.summary-row .name{font-weight:600;font-size:0.9rem;}
+.summary-row .detail{font-size:0.75rem;color:var(--text-light);}
+.summary-row .pay{font-weight:700;color:var(--green);font-size:0.95rem;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+</style>
+</head>
+<body>
+<header>
+  <h1>👷 梶原果樹園 雇人管理</h1>
+  <div class="sub">荒尾市 ― パートさん勤怠・給与</div>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
+  <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('summary',event)">💰 給与集計</button>
+</div>
+
+<!-- 入力ページ -->
+<div id="page-input" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧑‍🌾 氏名</div>
+    <div class="btn-group" id="name-btns"></div>
+    <div style="margin-top:8px;">
+      <input type="text" id="new-name" placeholder="新しい人を追加（名前を入れて＋）" style="font-size:0.85rem;">
+      <button class="btn-today" style="width:100%;margin-top:6px;" onclick="addName()">＋ この人を追加</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 作業内容</div>
+    <div class="btn-group" id="work-btns"></div>
+    <div id="work-other-wrap" style="margin-top:8px;display:none;">
+      <input type="text" id="work-other" placeholder="作業内容を入力（例：袋外し、水やり）" style="font-size:0.85rem;">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⏰ 勤務時間</div>
+    <div class="row2">
+      <div>
+        <label>開始</label>
+        <input type="time" id="start" value="08:00" onchange="updateCalc()">
+      </div>
+      <div>
+        <label>終了</label>
+        <input type="time" id="end" value="17:00" onchange="updateCalc()">
+      </div>
+    </div>
+    <div class="row2" style="margin-top:10px;">
+      <div>
+        <label>休憩（分）</label>
+        <input type="number" id="break" value="60" inputmode="numeric" onchange="updateCalc()">
+      </div>
+      <div>
+        <label>時給（円）</label>
+        <input type="number" id="wage" placeholder="1000" inputmode="numeric" onchange="updateCalc()" oninput="updateCalc()">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🚗 交通費（任意）</div>
+    <input type="number" id="transport" placeholder="0" inputmode="numeric" oninput="updateCalc()">
+    <div class="calc-display">
+      <div class="calc-row"><span>実働時間</span><span id="calc-hours">—</span></div>
+      <div class="calc-row"><span>日当（実働×時給）</span><span id="calc-daily">—</span></div>
+      <div class="calc-row total"><span>支給額</span><span id="calc-total">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 備考</div>
+    <input type="text" id="note" placeholder="例：袋かけ手伝い、午後から">
+  </div>
+
+  <button class="btn-save" onclick="saveRecord()">💾 保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+  <div class="sync-status" id="sync-status"></div>
+</div>
+
+<!-- 履歴ページ -->
+<div id="page-list" class="page">
+  <div id="list-content"></div>
+</div>
+
+<!-- 給与集計ページ -->
+<div id="page-summary" class="page">
+  <div class="card">
+    <div class="card-title">📅 集計する月</div>
+    <input type="month" id="summary-month" onchange="renderSummary()">
+  </div>
+  <div class="card">
+    <div class="card-title">💰 人別 給与集計</div>
+    <div id="summary-content"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">☁️ Googleスプレッドシート送信</div>
+    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
+    <div class="sync-status" id="sync-status2"></div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY='kajiwara_workers_v1';
+const NAME_KEY='kajiwara_worker_names_v1';
+let records=JSON.parse(localStorage.getItem(STORAGE_KEY)||'[]');
+let names=JSON.parse(localStorage.getItem(NAME_KEY)||'[]');
+
+// ▼▼▼ GASのURLを貼り付け（雇人シートに送信） ▼▼▼
+const GAS_URL='';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+const WORKS=['採花','花粉精製','授粉','袋かけ','摘果','収穫','選果','剪定','草刈り','消毒','その他'];
+let selName='';
+
+function init(){
+  renderNameBtns();
+  const wb=document.getElementById('work-btns');
+  WORKS.forEach(w=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=w;
+    b.onclick=()=>{
+      b.classList.toggle('selected');
+      const wrap=document.getElementById('work-other-wrap');
+      const otherSel=document.querySelector('#work-btns .opt.selected')&&[...document.querySelectorAll('#work-btns .opt.selected')].some(x=>x.textContent==='その他');
+      if(otherSel){wrap.style.display='block';}
+      else{wrap.style.display='none';}
+    };
+    wb.appendChild(b);
+  });
+  setToday();
+  document.getElementById('summary-month').value=new Date().toISOString().slice(0,7);
+  updateCalc();
+}
+
+function renderNameBtns(){
+  const nb=document.getElementById('name-btns');
+  nb.innerHTML='';
+  if(names.length===0){nb.innerHTML='<span class="note">下の欄から名前を登録してください</span>';return;}
+  names.forEach(n=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=n;
+    b.onclick=()=>{document.querySelectorAll('#name-btns .opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');selName=n;};
+    nb.appendChild(b);
+  });
+}
+
+function addName(){
+  const el=document.getElementById('new-name');
+  const n=el.value.trim();
+  if(!n)return;
+  if(names.includes(n)){alert('もう登録されています');return;}
+  names.push(n);
+  localStorage.setItem(NAME_KEY,JSON.stringify(names));
+  el.value='';
+  renderNameBtns();
+}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+  if(name==='summary')renderSummary();
+}
+
+function calcHours(){
+  const s=document.getElementById('start').value;
+  const e=document.getElementById('end').value;
+  const br=parseFloat(document.getElementById('break').value)||0;
+  if(!s||!e)return 0;
+  const[sh,sm]=s.split(':').map(Number);
+  const[eh,em]=e.split(':').map(Number);
+  let mins=(eh*60+em)-(sh*60+sm)-br;
+  return Math.max(0,mins/60);
+}
+
+function updateCalc(){
+  const h=calcHours();
+  const wage=parseFloat(document.getElementById('wage').value)||0;
+  const trans=parseFloat(document.getElementById('transport').value)||0;
+  const daily=Math.round(h*wage);
+  const total=daily+trans;
+  document.getElementById('calc-hours').textContent=h>0?h.toFixed(1)+' 時間':'—';
+  document.getElementById('calc-daily').textContent=daily>0?daily.toLocaleString()+' 円':'—';
+  document.getElementById('calc-total').textContent=total>0?total.toLocaleString()+' 円':'—';
+}
+
+function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  if(!date){alert('日付を選んでください');return;}
+  if(!selName){alert('氏名を選んでください');return;}
+  const h=calcHours();
+  const wage=parseFloat(document.getElementById('wage').value)||0;
+  const trans=parseFloat(document.getElementById('transport').value)||0;
+  const daily=Math.round(h*wage);
+  // 作業内容：複数選択。「その他」が選ばれていれば自由記述を加える
+  let selectedWorks=[...document.querySelectorAll('#work-btns .opt.selected')].map(b=>b.textContent);
+  let workList=selectedWorks.filter(w=>w!=='その他');
+  if(selectedWorks.includes('その他')){
+    const otherText=document.getElementById('work-other').value.trim();
+    workList.push(otherText?otherText:'その他');
+  }
+  const workVal=workList.join('・');
+  const rec={
+    id:Date.now(),date,name:selName,work:workVal,
+    start:document.getElementById('start').value,
+    end:document.getElementById('end').value,
+    breakMin:document.getElementById('break').value,
+    hours:h.toFixed(2),wage,daily,transport:trans,
+    total:daily+trans,
+    note:document.getElementById('note').value.trim()
+  };
+  records.push(rec);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  syncOne(rec);
+  const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);
+  document.getElementById('note').value='';
+  document.getElementById('work-other').value='';
+  document.querySelectorAll('#work-btns .opt.selected').forEach(b=>b.classList.remove('selected'));
+  document.getElementById('work-other-wrap').style.display='none';
+}
+
+async function syncOne(rec){
+  if(!GAS_URL){setSync('sync-status','💾 端末に保存しました（シート未連携）');return;}
+  setSync('sync-status','📤 送信中...');
+  try{
+    await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'雇人',...rec})});
+    setSync('sync-status','✅ シートに送信しました');
+  }catch(e){setSync('sync-status','⚠️ 送信失敗（端末には保存済）');}
+}
+
+async function syncAll(){
+  if(!GAS_URL){alert('GAS_URLが設定されていません');return;}
+  if(records.length===0){alert('送信するデータがありません');return;}
+  setSync('sync-status2','📤 '+records.length+'件送信中...');
+  let ok=0;
+  for(const rec of records){
+    try{await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'雇人',...rec})});ok++;await new Promise(r=>setTimeout(r,100));}catch(e){}
+  }
+  setSync('sync-status2','✅ '+ok+'件送信完了');
+}
+
+function setSync(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg;}
+
+function renderList(){
+  const el=document.getElementById('list-content');
+  if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
+  const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=sorted.map(r=>{
+    const[y,m,d]=r.date.split('-');
+    let chips='';
+    if(r.work)r.work.split('・').forEach(w=>chips+=`<span class="chip">${w}</span>`);
+    chips+=`<span class="chip">${r.start}〜${r.end}</span>`;
+    chips+=`<span class="chip">実働${r.hours}h</span>`;
+    return`<div class="list-item">
+      <div class="list-date">${y}年${+m}月${+d}日　${r.name}　<span style="color:#1565c0">${r.total.toLocaleString()}円</span>
+        <span style="float:right;color:#ccc;cursor:pointer" onclick="delRec(${r.id})">✕</span></div>
+      <div class="list-detail">${chips}</div>
+      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function delRec(id){
+  if(!confirm('この記録を削除しますか？'))return;
+  records=records.filter(r=>r.id!==id);
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
+}
+
+function renderSummary(){
+  const month=document.getElementById('summary-month').value;
+  const el=document.getElementById('summary-content');
+  const filtered=records.filter(r=>r.date.startsWith(month));
+  if(filtered.length===0){el.innerHTML='<div class="empty">この月の記録はありません</div>';return;}
+  const byName={};
+  filtered.forEach(r=>{
+    if(!byName[r.name])byName[r.name]={days:0,hours:0,pay:0};
+    byName[r.name].days++;
+    byName[r.name].hours+=parseFloat(r.hours);
+    byName[r.name].pay+=r.total;
+  });
+  let grandTotal=0;
+  let html=Object.entries(byName).map(([name,d])=>{
+    grandTotal+=d.pay;
+    return`<div class="summary-row">
+      <div><div class="name">${name}</div><div class="detail">${d.days}日 / 実働${d.hours.toFixed(1)}h</div></div>
+      <div class="pay">${d.pay.toLocaleString()}円</div>
+    </div>`;
+  }).join('');
+  html+=`<div class="summary-row" style="border-top:2px solid var(--green);"><div class="name">合計</div><div class="pay" style="font-size:1.1rem">${grandTotal.toLocaleString()}円</div></div>`;
+  el.innerHTML=html;
+}
+
+init();
+</script>
+</body>
+</html>
