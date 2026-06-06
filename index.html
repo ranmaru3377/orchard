@@ -959,6 +959,12 @@ const FIREBASE_PATH = "kajiwara_orchard";
   <select id="cmp-year-a" onchange="applyCompare()"></select>
   <span style="color:#adc">比較:</span>
   <select id="cmp-year-b" onchange="applyCompare()"></select>
+  <span style="color:#adc">表示:</span>
+  <div id="cmp-view" style="display:flex;gap:3px;border:1px solid #4aaa2a;border-radius:7px;overflow:hidden">
+    <button id="cv-A"    onclick="setCompareView('A')"    style="padding:6px 10px;border:none;background:#2a5a3a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;min-height:34px">今年</button>
+    <button id="cv-B"    onclick="setCompareView('B')"    style="padding:6px 10px;border:none;background:#2a5a3a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;min-height:34px">比較年</button>
+    <button id="cv-both" onclick="setCompareView('both')" style="padding:6px 10px;border:none;background:#4aaa2a;color:#fff;font-size:12px;font-weight:700;cursor:pointer;min-height:34px">重ね</button>
+  </div>
   <div id="cmp-result" style="color:#7ada5a;font-size:11px;flex:1;min-width:100px"></div>
   <button onclick="clearCompare()" style="padding:6px 12px;border-radius:6px;border:none;background:#4a1a1a;color:#f88;font-size:12px;cursor:pointer;min-height:34px">✕ 解除</button>
 </div>
@@ -971,6 +977,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
   <div id="tools">
     <div class="tbtn on" id="btn-select" title="選択" onclick="setTool('select')">↖</div>
     <div class="tbtn" id="btn-add" title="木を追加" onclick="setTool('add')">🌳</div>
+    <div class="tbtn" id="btn-move" title="木を移動" onclick="setTool('move')" style="font-size:18px">✋</div>
     <div class="tbtn" title="全体表示" onclick="fitAll()">⊡</div>
     <div class="tbtn" id="btn-gps" title="現在地" onclick="toggleGps()" style="font-size:18px">📍</div>
     <div class="tbtn" id="btn-undo" title="元に戻す" onclick="undo()" style="opacity:0.4;pointer-events:none">↩</div>
@@ -986,6 +993,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
         <div id="gps-status" style="font-weight:600;color:#3a8a2a">取得中...</div>
         <div id="gps-coords" style="color:#667;margin-top:1px;font-size:11px"></div>
         <div id="gps-accuracy" style="color:#999;font-size:10px"></div>
+        <div id="gps-nearest" style="margin-top:5px;font-weight:700;color:#2a6a0a;font-size:13px"></div>
       </div>
       <div onclick="toggleGps()" style="cursor:pointer;color:#999;font-size:18px;padding:4px 8px">✕</div>
     </div>
@@ -1354,10 +1362,14 @@ map.on('dblclick', function(e) {
 // ==============================
 function setTool(t) {
   tool = t;
-  ['select','add'].forEach(x => document.getElementById('btn-'+x).classList.toggle('on', x===t));
+  ['select','add','move'].forEach(x => { const b=document.getElementById('btn-'+x); if(b) b.classList.toggle('on', x===t); });
+  // 移動モードのときだけ全ての木をドラッグ可能にする
+  Object.values(markerMap).forEach(m => { try { (t==='move') ? m.dragging.enable() : m.dragging.disable(); } catch(e){} });
   map.getContainer().style.cursor = t==='add' ? 'crosshair' : '';
   document.getElementById('statusbar').textContent =
-    t==='add' ? '地図をタップして木を配置 / ↖で選択に戻す' : 'タップで木を選択 ／ 🌳で木を追加';
+    t==='add'  ? '地図をタップして木を配置 / ↖で選択に戻す' :
+    t==='move' ? '✋ 移動モード：木をドラッグして移動 / ↖で終了' :
+                 'タップで木を選択 ／ 🌳で木を追加';
 }
 
 // ==============================
@@ -1568,9 +1580,15 @@ function makeIcon(t, sel) {
     const dateB = `${compareState.yearB}-${mm}-${dd}`;
     const doneA = isTaskDoneByDate(t, compareState.yearA, compareState.task, dateA);
     const doneB = isTaskDoneByDate(t, compareState.yearB, compareState.task, dateB);
-    if (!doneA && !doneB) { col = '#b4b2a9'; }
-    else if (doneA && !doneB) { compareExtra = 'box-shadow:0 0 0 3px #3a8a2a88;'; }
-    else if (!doneA && doneB) { col = '#85b7eb'; compareExtra = 'box-shadow:0 0 0 3px #2a7ab088;'; }
+    if (compareView === 'A') {            // 今年だけ表示：完了=緑 / 未=灰
+      col = doneA ? '#2e9e2e' : '#c7c5be';
+    } else if (compareView === 'B') {     // 比較年だけ表示：完了=緑 / 未=灰
+      col = doneB ? '#2e9e2e' : '#c7c5be';
+    } else {                              // 重ね合わせ
+      if (!doneA && !doneB) { col = '#b4b2a9'; }
+      else if (doneA && !doneB) { compareExtra = 'box-shadow:0 0 0 3px #3a8a2a88;'; }
+      else if (!doneA && doneB) { col = '#85b7eb'; compareExtra = 'box-shadow:0 0 0 3px #2a7ab088;'; }
+    }
   }
 
   const doneCount = TASKS.filter(tk => getTaskSt(t, curYear, tk) === 'done').length;
@@ -1596,13 +1614,15 @@ function makeIcon(t, sel) {
   }
   if (sel) extra += 'box-shadow:0 0 0 4px rgba(80,220,80,0.55),0 2px 8px rgba(0,0,0,0.4);';
   if (compareExtra && !sel) extra = compareExtra;
+  // 現在地の最寄りの木を強調（GPS）
+  if (t.id === gpsNearestId) extra += 'box-shadow:0 0 0 5px #ff5a00,0 0 16px 4px rgba(255,90,0,0.9);';
 
   const pct = Math.round(doneCount / TASKS.length * 100);
   const progressBar = !compareMode && zoom >= 18
     ? `<div style="position:absolute;bottom:-8px;left:0;right:0;height:4px;border-radius:2px;background:rgba(0,0,0,0.2)"><div style="height:4px;border-radius:2px;background:#fff;width:${pct}%;opacity:0.9"></div></div>`
     : '';
   const nameTag = zoom >= 20
-    ? `<div style="position:absolute;top:${sz+4}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;pointer-events:none">${t.variety||''} ${compareMode?'':doneCount+'/'+TASKS.length}</div>`
+    ? `<div style="position:absolute;top:${sz+4}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;pointer-events:none">${t.variety||''}</div>`
     : '';
 
   return L.divIcon({
@@ -1615,38 +1635,11 @@ function makeIcon(t, sel) {
 
 map.on('zoomend', () => { trees.forEach(t => refreshMarker(t.id)); });
 
-// 移動モード管理（長押しで解錠した木を保持）
-var unlockedMarker = null, unlockTimer = null;
-function relockMarker() {
-  if (unlockedMarker) { try { unlockedMarker.dragging.disable(); } catch(e){} unlockedMarker = null; }
-  if (unlockTimer) { clearTimeout(unlockTimer); unlockTimer = null; }
-}
-
 function addMarker(t) {
   const m = L.marker([t.lat,t.lng], {icon:makeIcon(t,false), draggable:true, zIndexOffset:100});
-  let lpTimer = null, justUnlocked = false;
-
-  const startPress = () => {
-    if (lpTimer) clearTimeout(lpTimer);
-    lpTimer = setTimeout(() => {            // 0.5秒長押しで移動モード
-      relockMarker();
-      try { m.dragging.enable(); } catch(e){}
-      unlockedMarker = m; justUnlocked = true;
-      try { if (navigator.vibrate) navigator.vibrate(40); } catch(e){}
-      document.getElementById('statusbar').textContent = '✋ #'+t.id+' を移動できます → そのままドラッグ（6秒で解除）';
-      unlockTimer = setTimeout(relockMarker, 6000);
-    }, 500);
-  };
-  const endPress = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
-  m.on('mousedown', startPress);
-  m.on('touchstart', startPress);
-  m.on('mouseup', endPress);
-  m.on('touchend', endPress);
 
   m.on('click', () => {
-    endPress();
-    if (justUnlocked) { justUnlocked = false; return; }  // 長押し解錠直後のタップは無視
-    if (unlockedMarker === m) return;                    // 移動モード中はステータス変更しない
+    if (tool === 'move') return;   // 移動モード中はステータスを変えない
     setTool('select');
     const task = document.getElementById('header-task')?.value || '';
     if (task) {
@@ -1664,10 +1657,10 @@ function addMarker(t) {
     const tt = trees.find(x=>x.id===t.id);
     if (tt) { tt.lat=e.target.getLatLng().lat; tt.lng=e.target.getLatLng().lng; }
     document.getElementById('statusbar').textContent = '✅ #'+t.id+' の位置を移動しました';
-    relockMarker();
   });
   m.addTo(map);
-  try { m.dragging.disable(); } catch(e){}   // 地図追加後に固定（誤って動かさない）
+  // 移動モード以外では固定（誤って動かさない）
+  try { (tool==='move') ? m.dragging.enable() : m.dragging.disable(); } catch(e){}
   markerMap[t.id] = m;
 }
 
@@ -2161,7 +2154,21 @@ function fitAll() {
 // 年比較モード
 // ==============================
 let compareMode = false;
+let compareView = 'both';   // 'A'=今年 / 'B'=比較年 / 'both'=重ね
 let compareState = { task:'', date:'', yearA:new Date().getFullYear(), yearB:new Date().getFullYear()-1 };
+function setCompareView(v) {
+  compareView = v;
+  updateViewButtons();
+  trees.forEach(t=>refreshMarker(t.id));
+  applyCompare();
+}
+function updateViewButtons() {
+  const on = '#4aaa2a', off = '#2a5a3a';
+  const A=document.getElementById('cv-A'), B=document.getElementById('cv-B'), b=document.getElementById('cv-both');
+  if(A) A.style.background = compareView==='A' ? on : off;
+  if(B) B.style.background = compareView==='B' ? on : off;
+  if(b) b.style.background = compareView==='both' ? on : off;
+}
 function toggleCompare() {
   compareMode = !compareMode;
   const bar = document.getElementById('compare-bar');
@@ -2203,10 +2210,21 @@ function applyCompare() {
     if(isTaskDoneByDate(t,compareState.yearA,compareState.task,dateA)) doneA++;
     if(isTaskDoneByDate(t,compareState.yearB,compareState.task,dateB)) doneB++;
   });
+  // ボタンに実際の年を表示
+  const bA=document.getElementById('cv-A'), bB=document.getElementById('cv-B');
+  if(bA) bA.textContent = compareState.yearA+'年';
+  if(bB) bB.textContent = compareState.yearB+'年';
+  updateViewButtons();
   const diff=doneA-doneB;
   const diffStr=diff>0?`+${diff}本↑進んでいる`:diff<0?`${diff}本↓遅れている`:`同数`;
-  document.getElementById('cmp-result').textContent =
-    `${compareState.yearA}年:${doneA}/${total} ／ ${compareState.yearB}年:${doneB}/${total} → ${diffStr}`;
+  const el=document.getElementById('cmp-result');
+  if (compareView==='A') {
+    el.textContent = `【${compareState.yearA}年 ${mm}/${dd}時点】完了 ${doneA}/${total}本（緑＝完了）`;
+  } else if (compareView==='B') {
+    el.textContent = `【${compareState.yearB}年 ${mm}/${dd}時点】完了 ${doneB}/${total}本（緑＝完了）`;
+  } else {
+    el.textContent = `${compareState.yearA}年:${doneA}/${total} ／ ${compareState.yearB}年:${doneB}/${total} → ${diffStr}`;
+  }
   trees.forEach(t=>refreshMarker(t.id));
 }
 function isTaskDoneByDate(t, year, task, dateStr) {
@@ -2225,7 +2243,7 @@ function clearCompare() {
 // ==============================
 // GPS
 // ==============================
-let gpsActive=false, gpsWatchId=null, gpsMarker=null, gpsCircle=null, gpsLatLng=null;
+let gpsActive=false, gpsWatchId=null, gpsMarker=null, gpsCircle=null, gpsLatLng=null, gpsNearestId=null;
 function toggleGps() { gpsActive ? stopGps() : startGps(); }
 function startGps() {
   if(!navigator.geolocation){alert('位置情報が使えません');return;}
@@ -2243,6 +2261,7 @@ function stopGps() {
   if(gpsMarker){try{map.removeLayer(gpsMarker);}catch(e){}gpsMarker=null;}
   if(gpsCircle){try{map.removeLayer(gpsCircle);}catch(e){}gpsCircle=null;}
   gpsLatLng=null;
+  const prev=gpsNearestId; gpsNearestId=null; if(prev) refreshMarker(prev);
   document.getElementById('btn-gps').classList.remove('on');
   document.getElementById('gps-bar').style.display='none';
 }
@@ -2264,6 +2283,31 @@ function onGpsSuccess(pos) {
   document.getElementById('gps-coords').textContent=`${lat.toFixed(6)}, ${lng.toFixed(6)}`;
   document.getElementById('gps-accuracy').textContent=`精度: 約±${acc}m　${accLabel}`;
   document.getElementById('gps-add-btn').style.display='block';
+  updateNearestTree(lat,lng);
+}
+// 現在地から一番近い木を求めて強調表示
+function distMeters(aLat,aLng,bLat,bLng){
+  const R=6378137;
+  const dLat=(bLat-aLat)*Math.PI/180, dLng=(bLng-aLng)*Math.PI/180;
+  const m=(aLat+bLat)/2*Math.PI/180;
+  const x=dLng*Math.cos(m), y=dLat;
+  return Math.sqrt(x*x+y*y)*R;
+}
+function updateNearestTree(lat,lng){
+  const cand=trees.filter(t=>t.oid===curOid);
+  let best=null, bd=Infinity;
+  cand.forEach(t=>{ const d=distMeters(lat,lng,t.lat,t.lng); if(d<bd){bd=d;best=t;} });
+  const prev=gpsNearestId;
+  gpsNearestId = best ? best.id : null;
+  if(prev && prev!==gpsNearestId) refreshMarker(prev);
+  if(gpsNearestId) refreshMarker(gpsNearestId);
+  const el=document.getElementById('gps-nearest');
+  if(el){
+    if(best){
+      const z=best.zid?zones.find(z=>z.id===best.zid):null;
+      el.textContent=`🎯 目の前の木: #${best.id} ${best.variety||''}${z?'（'+z.name+'）':''} 約${bd.toFixed(1)}m`;
+    } else { el.textContent=''; }
+  }
 }
 function onGpsError(err) {
   const msgs={1:'設定で「位置情報」を許可してください',2:'位置情報を取得できませんでした',3:'タイムアウト。もう一度お試しください'};
