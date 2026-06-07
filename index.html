@@ -980,6 +980,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
     <div class="tbtn" id="btn-move" title="木を移動" onclick="setTool('move')" style="font-size:18px">✋</div>
     <div class="tbtn" title="全体表示" onclick="fitAll()">⊡</div>
     <div class="tbtn" id="btn-gps" title="現在地" onclick="toggleGps()" style="font-size:18px">📍</div>
+    <div class="tbtn" id="btn-compass" title="方位（向き）" onclick="toggleHeading()" style="font-size:18px">🧭</div>
     <div class="tbtn" id="btn-undo" title="元に戻す" onclick="undo()" style="opacity:0.4;pointer-events:none">↩</div>
     <div class="tbtn" id="btn-sat" title="衛星写真" onclick="setLayer('sat')" style="font-size:11px;font-weight:700">衛星</div>
     <div class="tbtn" id="btn-map" title="地図" onclick="setLayer('osm')" style="font-size:11px">地図</div>
@@ -1020,6 +1021,16 @@ const FIREBASE_PATH = "kajiwara_orchard";
       <span id="legend-toggle" style="color:#3a8a2a;font-size:10px">▲ 隠す</span>
     </div>
     <div id="legend-body"></div>
+  </div>
+
+  <!-- 方位コンパス -->
+  <div id="compass-widget" style="display:none;position:absolute;top:58px;right:12px;z-index:600;
+    width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,0.95);
+    border:1.5px solid #3a8a2a;box-shadow:0 2px 8px rgba(0,0,0,0.25);
+    display:none;align-items:center;justify-content:center;">
+    <div style="position:absolute;top:2px;font-size:9px;font-weight:700;color:#c0392b;">N</div>
+    <div id="compass-arrow" style="width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:26px solid #2a7ab0;transition:transform 0.15s ease-out;"></div>
+    <div id="compass-label" style="position:absolute;bottom:4px;font-size:9px;font-weight:700;color:#333;">—</div>
   </div>
 
   <div id="statusbar">タップで木を選択 ／ 🌳で木を追加</div>
@@ -1078,7 +1089,10 @@ const FIREBASE_PATH = "kajiwara_orchard";
             <option>馬次郎</option><option>ヤーリー</option><option>その他</option><option>（未定）</option>
           </select>
         </div>
-        <div class="frow"><div class="flabel">樹齢（年）</div><input type="number" id="ei-age" min="1" max="99" oninput="autoSave()"></div>
+        <div class="frow"><div class="flabel">植付年（西暦）</div>
+          <input type="number" id="ei-plantyear" min="1900" max="2100" placeholder="例：2020" oninput="autoSave()">
+          <div id="ei-age-calc" style="font-size:12px;color:#3a8a2a;font-weight:600;margin-top:5px"></div>
+        </div>
         <div class="frow"><div class="flabel">メモ</div><textarea id="ei-memo" oninput="autoSave()"></textarea></div>
         <button class="gbtn red" onclick="delTree()">🗑 この木を削除</button>
       </div>
@@ -1565,10 +1579,21 @@ function delZone() {
 // ==============================
 function treeColor(t) { return VARIETY_COLOR[t.variety] || '#7f8c8d'; }
 
+// 樹齢の区分（幼木→若木→成木→老木）
+function ageCategory(age) {
+  if (age == null || isNaN(age)) return { label:'', factor:1 };
+  if (age <= 5)  return { label:'幼木', factor:0.66 };
+  if (age <= 20) return { label:'若木', factor:0.85 };
+  if (age <= 50) return { label:'成木', factor:1.05 };
+  return { label:'老木', factor:1.3 };
+}
+
 function makeIcon(t, sel) {
   const zoom = map.getZoom();
   const base = zoom >= 21 ? 34 : zoom >= 20 ? 26 : zoom >= 19 ? 18 : zoom >= 18 ? 12 : 10;
-  const sz = sel ? base + 6 : base;
+  // 樹齢区分で大きさを変える
+  const ageInfo = ageCategory(treeAgeAt(t, curYear));
+  const sz = Math.max(8, Math.round((sel ? base + 6 : base) * ageInfo.factor));
   const lbl = (t.variety||'').substring(0,2);
   const fsize = Math.max(7, Math.round(sz * 0.35));
   let col = treeColor(t);
@@ -1707,11 +1732,28 @@ function setTaskDate(tId, task, date) {
   if (!t.tasks[curYear][task]) t.tasks[curYear][task] = {};
   t.tasks[curYear][task].date = date;
 }
+// 植付年から、指定年時点の樹齢を計算（植付年が無ければ旧データのageを使用）
+function treeAgeAt(t, year) {
+  if (t.plantYear) return year - Number(t.plantYear);
+  if (t.age !== '' && t.age != null) return Number(t.age);
+  return null;
+}
+function updateAgeCalc(t) {
+  const el = document.getElementById('ei-age-calc'); if (!el) return;
+  const a = treeAgeAt(t, curYear);
+  if (a != null && !isNaN(a)) {
+    const cat = ageCategory(a).label;
+    el.textContent = `→ ${curYear}年時点の樹齢：約${a}年目（${cat}）`;
+  } else {
+    el.textContent = '植付年を入力すると樹齢を自動計算します';
+  }
+}
+
 function changeYear(delta) {
   curYear += delta;
   document.getElementById('cur-year-label').textContent = curYear;
   const t = selId ? trees.find(t=>t.id===selId) : null;
-  if (t) renderTaskChecks(t);
+  if (t) { renderTaskChecks(t); updateAgeCalc(t); }
   trees.forEach(t => refreshMarker(t.id));
   renderList();
 }
@@ -1768,7 +1810,8 @@ function selectTree(id) {
   document.getElementById('ei-id').textContent = '#'+t.id;
   setBadge(t.status);
   document.getElementById('ei-variety').value = t.variety||'新高';
-  document.getElementById('ei-age').value = t.age||'';
+  document.getElementById('ei-plantyear').value = t.plantYear || (t.age ? (new Date().getFullYear() - Number(t.age)) : '');
+  updateAgeCalc(t);
   document.getElementById('ei-memo').value = t.memo||'';
   refreshCurrentTaskUI(t);
   document.querySelectorAll('.sbtn').forEach(b=>b.classList.remove('on'));
@@ -1812,8 +1855,10 @@ function autoSave() {
   if (!selId) return;
   const t = trees.find(t=>t.id===selId); if(!t) return;
   t.variety = document.getElementById('ei-variety').value;
-  t.age     = document.getElementById('ei-age').value;
+  const py = document.getElementById('ei-plantyear').value;
+  t.plantYear = py ? Number(py) : null;
   t.memo    = document.getElementById('ei-memo').value;
+  updateAgeCalc(t);
   refreshMarker(selId); renderList(); renderLegend();
 }
 function delTree() {
@@ -2244,6 +2289,68 @@ function clearCompare() {
 // GPS
 // ==============================
 let gpsActive=false, gpsWatchId=null, gpsMarker=null, gpsCircle=null, gpsLatLng=null, gpsNearestId=null;
+let headingOn=false, headingDeg=0, headingListening=false;
+
+// ==============================
+// 方位コンパス（向き）
+// ==============================
+function toggleHeading(){
+  if(headingOn){ stopHeading(); return; }
+  // iOS 13+ は許可が必要
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().then(state=>{
+      if(state==='granted') startHeading();
+      else alert('方位センサーの使用が許可されませんでした');
+    }).catch(()=>alert('方位センサーを利用できません'));
+  } else {
+    startHeading();
+  }
+}
+function startHeading(){
+  headingOn=true;
+  document.getElementById('btn-compass').classList.add('on');
+  document.getElementById('compass-widget').style.display='flex';
+  if(!headingListening){
+    window.addEventListener('deviceorientationabsolute', onOrient, true);
+    window.addEventListener('deviceorientation', onOrient, true);
+    headingListening=true;
+  }
+  // GPS未起動なら一緒に起動（現在地の扇形表示のため）
+  if(!gpsActive) startGps();
+  updateHeadingUI();
+}
+function stopHeading(){
+  headingOn=false;
+  document.getElementById('btn-compass').classList.remove('on');
+  document.getElementById('compass-widget').style.display='none';
+  if(gpsMarker&&gpsMarker._icon){ const c=gpsMarker._icon.querySelector('.gps-cone'); if(c) c.style.display='none'; }
+}
+function onOrient(e){
+  let h=null;
+  if(typeof e.webkitCompassHeading==='number' && !isNaN(e.webkitCompassHeading)){
+    h=e.webkitCompassHeading;            // iOS：0=北、時計回り
+  } else if(typeof e.alpha==='number'){
+    h=360-e.alpha;                        // Android：補正
+  }
+  if(h==null||isNaN(h)) return;
+  headingDeg=(h+360)%360;
+  updateHeadingUI();
+}
+function headingText(d){
+  const dirs=['北','北東','東','南東','南','南西','西','北西'];
+  return dirs[Math.round(d/45)%8];
+}
+function updateHeadingUI(){
+  if(!headingOn) return;
+  const arrow=document.getElementById('compass-arrow');
+  if(arrow) arrow.style.transform='rotate('+headingDeg+'deg)';
+  const lbl=document.getElementById('compass-label');
+  if(lbl) lbl.textContent=headingText(headingDeg)+' '+Math.round(headingDeg)+'°';
+  if(gpsMarker&&gpsMarker._icon){
+    const c=gpsMarker._icon.querySelector('.gps-cone');
+    if(c){ c.style.display='block'; c.style.transform='translateX(-50%) rotate('+headingDeg+'deg)'; }
+  }
+}
 function toggleGps() { gpsActive ? stopGps() : startGps(); }
 function startGps() {
   if(!navigator.geolocation){alert('位置情報が使えません');return;}
@@ -2273,7 +2380,11 @@ function onGpsSuccess(pos) {
     gpsMarker.setLatLng([lat,lng]);
     gpsCircle.setLatLng([lat,lng]).setRadius(acc);
   } else {
-    gpsMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div style="width:20px;height:20px;border-radius:50%;background:#2a7ab0;border:3px solid #fff;box-shadow:0 0 0 3px rgba(42,122,176,0.4),0 2px 6px rgba(0,0,0,0.3)"></div>`,iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000,interactive:false}).addTo(map);
+    gpsMarker=L.marker([lat,lng],{icon:L.divIcon({className:'',html:`<div style="position:relative;width:20px;height:20px;">
+      <div class="gps-cone" style="position:absolute;left:50%;bottom:50%;width:0;height:0;border-left:11px solid transparent;border-right:11px solid transparent;border-bottom:30px solid rgba(42,122,176,0.35);transform-origin:50% 100%;transform:translateX(-50%) rotate(0deg);display:${headingOn?'block':'none'};"></div>
+      <div style="position:absolute;inset:0;width:20px;height:20px;border-radius:50%;background:#2a7ab0;border:3px solid #fff;box-shadow:0 0 0 3px rgba(42,122,176,0.4),0 2px 6px rgba(0,0,0,0.3)"></div>
+    </div>`,iconSize:[20,20],iconAnchor:[10,10]}),zIndexOffset:1000,interactive:false}).addTo(map);
+    updateHeadingUI();
     gpsCircle=L.circle([lat,lng],{radius:acc,color:'#2a7ab0',weight:1.5,fillColor:'#2a7ab0',fillOpacity:0.08}).addTo(map);
     map.flyTo([lat,lng],Math.max(map.getZoom(),19),{duration:1.2});
   }
