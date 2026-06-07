@@ -106,7 +106,18 @@ input[type=number],input[type=text],input[type=time],select{width:100%;padding:9
     <div class="card-title">🔧 作業内容（1つ選択）</div>
     <div class="btn-group" id="work-btns"></div>
     <div id="work-other-wrap" style="margin-top:8px;display:none;">
-      <input type="text" id="work-other" placeholder="作業内容を入力" style="font-size:0.85rem;">
+      <input type="text" id="work-other" placeholder="作業内容を入力（保存すると候補に追加されます）" style="font-size:0.85rem;">
+    </div>
+    <div style="margin-top:10px;text-align:right;">
+      <span onclick="toggleWorkManage()" style="font-size:0.78rem;color:var(--blue);cursor:pointer;">⚙ 作業の追加・並べ替え</span>
+    </div>
+    <div id="work-manage" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">
+      <div style="font-size:0.74rem;color:var(--text-light);margin-bottom:6px;">▲▼で並べ替え、✕で削除できます</div>
+      <div id="work-manage-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input type="text" id="new-work" placeholder="作業を追加" style="font-size:0.85rem;">
+        <button class="btn-today" onclick="addWork()">＋追加</button>
+      </div>
     </div>
   </div>
 
@@ -186,23 +197,29 @@ input[type=number],input[type=text],input[type=time],select{width:100%;padding:9
 
 <script>
 // ====== 定数 ======
-const WORKS=['剪定','誘引・整枝','摘蕾','花粉採取','授粉','摘果','袋かけ','防除（農薬）','施肥','灌水','収穫','選果・出荷','草刈り','片付け','運搬','その他'];
+const DEFAULT_WORKS=['剪定','誘引・整枝','摘蕾','花粉採取','授粉','摘果','袋かけ','防除（農薬）','施肥','灌水','収穫','選果・出荷','草刈り','片付け','運搬','その他'];
 const FIELDS=['長洲園','新図園畑','新図園山','自宅園','全園'];
 
 // ====== 状態 ======
 let records = [];
 let persons = ['自分'];
+let works = DEFAULT_WORKS.slice();
 let selPerson='', selWork='', selField='';
 let seg='person';
 let editingId=null;
 
+// 「その他」を末尾に保ちつつ作業を追加
+function addWorkValue(name){
+  if(!name || works.includes(name)) return false;
+  const i=works.indexOf('その他');
+  if(i>=0) works.splice(i,0,name); else works.push(name);
+  return true;
+}
+
 // ====== 初期化 ======
 function init(){
   renderPersonBtns();
-  makeSingle('work-btns', WORKS, v=>{
-    selWork=v;
-    document.getElementById('work-other-wrap').style.display = (v==='その他')?'block':'none';
-  });
+  renderWorkBtns();
   makeSingle('field-btns', FIELDS, v=>{ selField=v; }, true);
   setToday();
   updateCalc();
@@ -229,6 +246,52 @@ function makeSingle(id,items,onSelect,toggleable){
     };
     c.appendChild(b);
   });
+}
+
+// 作業ボタンを描画（選択状態を保持）
+function renderWorkBtns(){
+  makeSingle('work-btns', works, v=>{
+    selWork=v;
+    document.getElementById('work-other-wrap').style.display = (v==='その他')?'block':'none';
+  });
+  if(selWork) selectBtnByText('work-btns', selWork);
+  renderWorkManage();
+}
+
+let workManageOpen=false;
+function toggleWorkManage(){
+  workManageOpen=!workManageOpen;
+  document.getElementById('work-manage').style.display=workManageOpen?'block':'none';
+  if(workManageOpen) renderWorkManage();
+}
+function renderWorkManage(){
+  const el=document.getElementById('work-manage-list'); if(!el)return;
+  el.innerHTML=works.map((w,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="flex:1;font-size:0.85rem;">${w}</span>
+      <button onclick="moveWork(${i},-1)" ${i===0?'disabled':''} style="width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;${i===0?'opacity:0.3;':''}">▲</button>
+      <button onclick="moveWork(${i},1)" ${i===works.length-1?'disabled':''} style="width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;${i===works.length-1?'opacity:0.3;':''}">▼</button>
+      <button onclick="delWork(${i})" style="width:30px;height:30px;border:1px solid #f0c0c0;border-radius:6px;background:#fff;color:#c0392b;cursor:pointer;">✕</button>
+    </div>`).join('');
+}
+function moveWork(i,dir){
+  const j=i+dir; if(j<0||j>=works.length)return;
+  const t=works[i]; works[i]=works[j]; works[j]=t;
+  renderWorkBtns(); scheduleSync();
+}
+function delWork(i){
+  const w=works[i];
+  if(!confirm(`作業候補「${w}」を削除しますか？\n（過去の記録は残ります）`))return;
+  works.splice(i,1);
+  renderWorkBtns(); scheduleSync();
+}
+function addWork(){
+  const el=document.getElementById('new-work');
+  const n=el.value.trim(); if(!n)return;
+  if(works.includes(n)){alert('もうあります');return;}
+  addWorkValue(n);
+  el.value='';
+  renderWorkBtns(); scheduleSync();
 }
 
 function renderPersonBtns(){
@@ -294,7 +357,10 @@ function saveRecord(){
   if(!selPerson){alert('だれが作業したか選んでください');return;}
   let work=selWork;
   if(!work){alert('作業内容を選んでください');return;}
-  if(work==='その他'){ const o=document.getElementById('work-other').value.trim(); work=o||'その他'; }
+  if(work==='その他'){
+    const o=document.getElementById('work-other').value.trim(); work=o||'その他';
+    if(work!=='その他' && addWorkValue(work)){ renderWorkBtns(); }  // 自由入力を候補に追加
+  }
   const h=calcHours();
   if(h<=0){alert('勤務時間を正しく入力してください');return;}
   const rec={ id: editingId || (Date.now()+Math.floor(Math.random()*1000)), date, person:selPerson, work,
@@ -458,7 +524,7 @@ function renderByWork(el,rows){
 // ====== Firebase 同期 ======
 const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false };
 let dataRef=null, lastJSON=null, syncTimer=null;
-function snapshotJSON(){ return JSON.stringify({records,persons}); }
+function snapshotJSON(){ return JSON.stringify({records,persons,works}); }
 function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){el.textContent=t;el.style.background=c;} }
 function scheduleSync(){ if(syncTimer)clearTimeout(syncTimer); syncTimer=setTimeout(pushIfChanged,800); }
 function pushIfChanged(){
@@ -467,7 +533,7 @@ function pushIfChanged(){
   if(cur===lastJSON)return;
   lastJSON=cur;
   setSyncDot('保存中…','#e09020');
-  dataRef.set({records,persons,writer:SYNC.id,updatedAt:Date.now()})
+  dataRef.set({records,persons,works,writer:SYNC.id,updatedAt:Date.now()})
     .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
     .catch(e=>{setSyncDot('保存失敗','#c0392b');console.error(e);lastJSON=null;});
 }
@@ -475,8 +541,10 @@ function applyRemote(d){
   SYNC.applying=true;
   records = d.records||[];
   persons = (d.persons&&d.persons.length)?d.persons:['自分'];
+  works = (d.works&&d.works.length)?d.works:DEFAULT_WORKS.slice();
   if(!selPerson && persons.length) selPerson=persons[0];
   renderPersonBtns();
+  renderWorkBtns();
   const active=document.querySelector('.page.active');
   if(active&&active.id==='page-list')renderList();
   if(active&&active.id==='page-summary')renderSummary();
