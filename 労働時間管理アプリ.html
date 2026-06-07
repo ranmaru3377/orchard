@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>梶原果樹園 労働時間管理</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+const FIREBASE_PATH = "kajiwara_labor";
+</script>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--gold:#c9a02a;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;}
+header h1{font-size:1.05rem;flex:1;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+#sync-dot{font-size:0.7rem;padding:4px 10px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.82rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:9px 13px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.85rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+.opt.person.selected{background:#fff3e0;border-color:var(--gold);color:#9a6a00;}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=number],input[type=text],input[type=time],select{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.row2{display:flex;gap:10px;}
+.row2>div{flex:1;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;opacity:0;transition:0.3s;}
+.save-msg.show{opacity:1;}
+.calc-display{background:var(--green-pale);border-radius:10px;padding:12px;margin-top:10px;}
+.calc-row{display:flex;justify-content:space-between;font-size:0.85rem;padding:3px 0;}
+.calc-row.total{border-top:1.5px solid var(--green-mid);margin-top:5px;padding-top:7px;font-weight:700;font-size:1.1rem;color:var(--green);}
+.list-item{background:#fff;border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;border-left:4px solid var(--green-mid);}
+.list-date{font-size:0.82rem;font-weight:700;color:var(--green);}
+.list-detail{font-size:0.8rem;color:var(--text);margin-top:4px;}
+.chip{display:inline-block;background:var(--green-pale);border-radius:6px;padding:2px 8px;font-size:0.74rem;margin:2px 3px 0 0;}
+.chip.person{background:#fff3e0;color:#9a6a00;}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;}
+.seg{display:flex;gap:6px;margin-bottom:12px;}
+.seg button{flex:1;padding:9px;border:1.5px solid var(--border);background:#fff;border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;color:var(--text-light);}
+.seg button.active{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:700;}
+.summary-row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid #eee;}
+.summary-row .name{font-weight:600;font-size:0.9rem;}
+.summary-row .detail{font-size:0.74rem;color:var(--text-light);margin-top:2px;}
+.summary-row .v{font-weight:700;color:var(--green);font-size:0.95rem;white-space:nowrap;}
+.summary-row.total{border-top:2px solid var(--green);}
+.bar{height:6px;border-radius:3px;background:#e6e6e6;margin-top:5px;overflow:hidden;}
+.bar > div{height:6px;background:var(--green-mid);border-radius:3px;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+.del-x{color:#ccc;cursor:pointer;float:right;}
+</style>
+</head>
+<body>
+<header>
+  <div style="flex:1">
+    <h1>⏱️ 梶原果樹園 労働時間管理</h1>
+    <div class="sub">荒尾市 ― 家族の労働時間・作業別集計</div>
+  </div>
+  <span id="sync-dot">接続中…</span>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
+  <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('summary',event)">📊 集計</button>
+</div>
+
+<!-- 入力ページ -->
+<div id="page-input" class="page active">
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧑‍🌾 だれが（1人を選択）</div>
+    <div class="btn-group" id="person-btns"></div>
+    <div style="margin-top:8px;display:flex;gap:6px;">
+      <input type="text" id="new-person" placeholder="家族を追加（名前を入れて＋）" style="font-size:0.85rem;">
+      <button class="btn-today" onclick="addPerson()">＋追加</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔧 作業内容（1つ選択）</div>
+    <div class="btn-group" id="work-btns"></div>
+    <div id="work-other-wrap" style="margin-top:8px;display:none;">
+      <input type="text" id="work-other" placeholder="作業内容を入力" style="font-size:0.85rem;">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📍 園地（任意）</div>
+    <div class="btn-group" id="field-btns"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">⏰ 勤務時間</div>
+    <div class="row2">
+      <div><label>開始</label><input type="time" id="start" value="08:00" onchange="updateCalc()"></div>
+      <div><label>終了</label><input type="time" id="end" value="17:00" onchange="updateCalc()"></div>
+    </div>
+    <div style="margin-top:10px;">
+      <label>休憩（分）</label>
+      <input type="number" id="break" value="60" inputmode="numeric" onchange="updateCalc()" oninput="updateCalc()">
+    </div>
+    <div class="calc-display">
+      <div class="calc-row total"><span>実働時間</span><span id="calc-hours">—</span></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 備考</div>
+    <input type="text" id="note" placeholder="例：新高3列目まで、午後から">
+  </div>
+
+  <button class="btn-save" id="save-btn" onclick="saveRecord()">💾 保存する</button>
+  <div class="save-msg" id="save-msg">✅ 保存しました！</div>
+</div>
+
+<!-- 履歴ページ -->
+<div id="page-list" class="page">
+  <div class="card" style="padding:10px 12px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span style="font-size:0.78rem;color:var(--text-light);white-space:nowrap;">絞り込み</span>
+      <select id="list-person" onchange="renderList()" style="flex:1;font-size:0.85rem;"><option value="">全員</option></select>
+      <select id="list-year" onchange="renderList()" style="width:90px;font-size:0.85rem;"></select>
+    </div>
+  </div>
+  <div id="list-content"></div>
+</div>
+
+<!-- 集計ページ -->
+<div id="page-summary" class="page">
+  <div class="card">
+    <div class="card-title">📅 対象期間</div>
+    <div class="row2">
+      <div><label>年</label><select id="sum-year" onchange="renderSummary()"></select></div>
+      <div><label>月（任意）</label>
+        <select id="sum-month" onchange="renderSummary()">
+          <option value="">通年</option>
+          <option value="1">1月</option><option value="2">2月</option><option value="3">3月</option>
+          <option value="4">4月</option><option value="5">5月</option><option value="6">6月</option>
+          <option value="7">7月</option><option value="8">8月</option><option value="9">9月</option>
+          <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="seg">
+    <button id="seg-person" class="active" onclick="setSeg('person')">👥 人別</button>
+    <button id="seg-work" onclick="setSeg('work')">🔧 作業別</button>
+  </div>
+  <div id="work-person-filter" class="card" style="display:none;padding:10px 12px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span style="font-size:0.78rem;color:var(--text-light);white-space:nowrap;">対象者</span>
+      <select id="sum-person" onchange="renderSummary()" style="flex:1;font-size:0.85rem;"><option value="">全員</option></select>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-title" id="sum-title">📊 人別 労働時間</div>
+    <div id="sum-content"></div>
+  </div>
+</div>
+
+<script>
+// ====== 定数 ======
+const WORKS=['剪定','誘引・整枝','摘蕾','花粉採取','授粉','摘果','袋かけ','防除（農薬）','施肥','灌水','収穫','選果・出荷','草刈り','片付け','運搬','その他'];
+const FIELDS=['長洲園','新図園畑','新図園山','自宅園','全園'];
+
+// ====== 状態 ======
+let records = [];
+let persons = ['自分'];
+let selPerson='', selWork='', selField='';
+let seg='person';
+
+// ====== 初期化 ======
+function init(){
+  renderPersonBtns();
+  makeSingle('work-btns', WORKS, v=>{
+    selWork=v;
+    document.getElementById('work-other-wrap').style.display = (v==='その他')?'block':'none';
+  });
+  makeSingle('field-btns', FIELDS, v=>{ selField=v; }, true);
+  setToday();
+  updateCalc();
+  // 年セレクト
+  const ys=[]; const ty=new Date().getFullYear();
+  for(let y=ty+1;y>=ty-5;y--) ys.push(y);
+  ['list-year','sum-year'].forEach(id=>{
+    const s=document.getElementById(id);
+    s.innerHTML=(id==='list-year'?'<option value="">全期間</option>':'')+ys.map(y=>`<option value="${y}">${y}年</option>`).join('');
+    if(id==='sum-year') s.value=ty;
+  });
+}
+
+function makeSingle(id,items,onSelect,toggleable){
+  const c=document.getElementById(id);
+  c.innerHTML='';
+  items.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    b.onclick=()=>{
+      const already=b.classList.contains('selected');
+      c.querySelectorAll('.opt').forEach(x=>x.classList.remove('selected'));
+      if(toggleable && already){ onSelect(''); return; }
+      b.classList.add('selected'); onSelect(v);
+    };
+    c.appendChild(b);
+  });
+}
+
+function renderPersonBtns(){
+  const c=document.getElementById('person-btns');
+  c.innerHTML='';
+  if(!persons.length){ c.innerHTML='<span class="note">下の欄から名前を追加してください</span>'; }
+  persons.forEach(n=>{
+    const b=document.createElement('button');b.className='opt person';b.textContent=n;
+    if(n===selPerson) b.classList.add('selected');
+    b.onclick=()=>{ document.querySelectorAll('#person-btns .opt').forEach(x=>x.classList.remove('selected')); b.classList.add('selected'); selPerson=n; };
+    c.appendChild(b);
+  });
+  // フィルター用セレクトも更新
+  ['list-person','sum-person'].forEach(id=>{
+    const s=document.getElementById(id); if(!s)return;
+    const cur=s.value;
+    s.innerHTML='<option value="">全員</option>'+persons.map(p=>`<option value="${p}">${p}</option>`).join('');
+    s.value=cur;
+  });
+}
+
+function addPerson(){
+  const el=document.getElementById('new-person');
+  const n=el.value.trim();
+  if(!n)return;
+  if(persons.includes(n)){alert('もう登録されています');return;}
+  persons.push(n);
+  el.value='';
+  renderPersonBtns();
+  scheduleSync();
+}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+  if(name==='summary')renderSummary();
+}
+
+function calcHours(){
+  const s=document.getElementById('start').value;
+  const e=document.getElementById('end').value;
+  const br=parseFloat(document.getElementById('break').value)||0;
+  if(!s||!e)return 0;
+  const[sh,sm]=s.split(':').map(Number);
+  const[eh,em]=e.split(':').map(Number);
+  let mins=(eh*60+em)-(sh*60+sm)-br;
+  return Math.max(0,mins/60);
+}
+function updateCalc(){
+  const h=calcHours();
+  document.getElementById('calc-hours').textContent=h>0?h.toFixed(1)+' 時間':'—';
+}
+
+function saveRecord(){
+  const date=document.getElementById('rec-date').value;
+  if(!date){alert('日付を選んでください');return;}
+  if(!selPerson){alert('だれが作業したか選んでください');return;}
+  let work=selWork;
+  if(!work){alert('作業内容を選んでください');return;}
+  if(work==='その他'){ const o=document.getElementById('work-other').value.trim(); work=o||'その他'; }
+  const h=calcHours();
+  if(h<=0){alert('勤務時間を正しく入力してください');return;}
+  const rec={ id:Date.now()+Math.floor(Math.random()*1000), date, person:selPerson, work,
+    field:selField, start:document.getElementById('start').value, end:document.getElementById('end').value,
+    breakMin:document.getElementById('break').value, hours:+h.toFixed(2),
+    note:document.getElementById('note').value.trim() };
+  records.push(rec);
+  scheduleSync();
+  const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2000);
+  // 連続入力しやすく：人と作業は残す、備考クリア
+  document.getElementById('note').value='';
+}
+
+function delRec(id){
+  if(!confirm('この記録を削除しますか？'))return;
+  records=records.filter(r=>r.id!==id);
+  scheduleSync();
+  renderList();
+}
+
+function fmtH(h){ return (Math.round(h*10)/10).toLocaleString()+'h'; }
+
+function renderList(){
+  const el=document.getElementById('list-content');
+  const fp=document.getElementById('list-person').value;
+  const fy=document.getElementById('list-year').value;
+  let rows=records.filter(r=>{
+    if(fp && r.person!==fp)return false;
+    if(fy && !r.date.startsWith(fy))return false;
+    return true;
+  });
+  if(!rows.length){el.innerHTML='<div class="empty">📭 該当する記録がありません</div>';return;}
+  rows.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=rows.map(r=>{
+    const[y,m,d]=r.date.split('-');
+    let chips=`<span class="chip person">🧑${r.person}</span><span class="chip">🔧${r.work}</span>`;
+    if(r.field)chips+=`<span class="chip">📍${r.field}</span>`;
+    chips+=`<span class="chip">${r.start||''}〜${r.end||''}</span>`;
+    return`<div class="list-item">
+      <div class="list-date">${y}年${+m}月${+d}日　<span style="color:var(--blue)">実働${fmtH(r.hours)}</span>
+        <span class="del-x" onclick="delRec(${r.id})">✕</span></div>
+      <div class="list-detail">${chips}</div>
+      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function setSeg(s){
+  seg=s;
+  document.getElementById('seg-person').classList.toggle('active',s==='person');
+  document.getElementById('seg-work').classList.toggle('active',s==='work');
+  document.getElementById('sum-title').textContent=s==='person'?'📊 人別 労働時間':'📊 作業別 労働時間';
+  document.getElementById('work-person-filter').style.display=s==='work'?'block':'none';
+  renderSummary();
+}
+
+function filteredForSummary(){
+  const yr=document.getElementById('sum-year').value;
+  const mo=document.getElementById('sum-month').value;
+  return records.filter(r=>{
+    if(yr && !r.date.startsWith(yr))return false;
+    if(mo){ const m=parseInt(r.date.split('-')[1]); if(m!==parseInt(mo))return false; }
+    return true;
+  });
+}
+
+function renderSummary(){
+  const el=document.getElementById('sum-content');
+  const rows=filteredForSummary();
+  if(!rows.length){el.innerHTML='<div class="empty">この期間の記録はありません</div>';return;}
+  if(seg==='person') renderByPerson(el,rows);
+  else renderByWork(el,rows);
+}
+
+function renderByPerson(el,rows){
+  const map={};
+  rows.forEach(r=>{
+    if(!map[r.person])map[r.person]={hours:0,days:new Set(),topWork:{}};
+    map[r.person].hours+=r.hours;
+    map[r.person].days.add(r.date);
+    map[r.person].topWork[r.work]=(map[r.person].topWork[r.work]||0)+r.hours;
+  });
+  const arr=Object.entries(map).map(([name,d])=>({name,hours:d.hours,days:d.days.size,
+    top:Object.entries(d.topWork).sort((a,b)=>b[1]-a[1])[0]}));
+  arr.sort((a,b)=>b.hours-a.hours);
+  const grand=arr.reduce((s,a)=>s+a.hours,0);
+  const max=Math.max(...arr.map(a=>a.hours),1);
+  let html=arr.map(a=>`
+    <div class="summary-row" style="display:block;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="name">🧑 ${a.name}</div>
+          <div class="detail">${a.days}日　最多: ${a.top?a.top[0]+'('+fmtH(a.top[1])+')':'—'}</div></div>
+        <div class="v">${fmtH(a.hours)}</div>
+      </div>
+      <div class="bar"><div style="width:${Math.round(a.hours/max*100)}%"></div></div>
+    </div>`).join('');
+  html+=`<div class="summary-row total"><span class="name">合計</span><span class="v" style="font-size:1.15rem">${fmtH(grand)}</span></div>`;
+  el.innerHTML=html;
+}
+
+function renderByWork(el,rows){
+  const fp=document.getElementById('sum-person').value;
+  if(fp) rows=rows.filter(r=>r.person===fp);
+  if(!rows.length){el.innerHTML='<div class="empty">この対象者の記録はありません</div>';return;}
+  const map={};
+  rows.forEach(r=>{
+    if(!map[r.work])map[r.work]={hours:0,count:0};
+    map[r.work].hours+=r.hours; map[r.work].count++;
+  });
+  const arr=Object.entries(map).map(([work,d])=>({work,hours:d.hours,count:d.count}));
+  arr.sort((a,b)=>b.hours-a.hours);
+  const grand=arr.reduce((s,a)=>s+a.hours,0);
+  const max=Math.max(...arr.map(a=>a.hours),1);
+  let html=arr.map(a=>{
+    const pct=Math.round(a.hours/grand*100);
+    return `<div class="summary-row" style="display:block;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+        <div><div class="name">🔧 ${a.work}</div><div class="detail">${a.count}回　全体の${pct}%</div></div>
+        <div class="v">${fmtH(a.hours)}</div>
+      </div>
+      <div class="bar"><div style="width:${Math.round(a.hours/max*100)}%"></div></div>
+    </div>`;
+  }).join('');
+  html+=`<div class="summary-row total"><span class="name">合計</span><span class="v" style="font-size:1.15rem">${fmtH(grand)}</span></div>`;
+  el.innerHTML=html;
+}
+
+// ====== Firebase 同期 ======
+const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false };
+let dataRef=null, lastJSON=null, syncTimer=null;
+function snapshotJSON(){ return JSON.stringify({records,persons}); }
+function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){el.textContent=t;el.style.background=c;} }
+function scheduleSync(){ if(syncTimer)clearTimeout(syncTimer); syncTimer=setTimeout(pushIfChanged,800); }
+function pushIfChanged(){
+  if(!SYNC.ready||SYNC.applying||!dataRef)return;
+  const cur=snapshotJSON();
+  if(cur===lastJSON)return;
+  lastJSON=cur;
+  setSyncDot('保存中…','#e09020');
+  dataRef.set({records,persons,writer:SYNC.id,updatedAt:Date.now()})
+    .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
+    .catch(e=>{setSyncDot('保存失敗','#c0392b');console.error(e);lastJSON=null;});
+}
+function applyRemote(d){
+  SYNC.applying=true;
+  records = d.records||[];
+  persons = (d.persons&&d.persons.length)?d.persons:['自分'];
+  if(!selPerson && persons.length) selPerson=persons[0];
+  renderPersonBtns();
+  const active=document.querySelector('.page.active');
+  if(active&&active.id==='page-list')renderList();
+  if(active&&active.id==='page-summary')renderSummary();
+  lastJSON=snapshotJSON();
+  SYNC.applying=false;
+}
+function initFirebase(){
+  if(typeof firebase==='undefined'){setSyncDot('SDK失敗','#c0392b');return;}
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dataRef=firebase.database().ref(FIREBASE_PATH);
+    firebase.database().ref('.info/connected').on('value',s=>{
+      if(s.val()===true){ if(SYNC.ready)setSyncDot('同期済 ✓','#3a8a2a'); }
+      else setSyncDot('オフライン','#888');
+    });
+    dataRef.on('value',snap=>{
+      const d=snap.val();
+      if(!d){ SYNC.ready=true; lastJSON=null; pushIfChanged(); return; }
+      SYNC.ready=true;
+      if(d.writer===SYNC.id){ setSyncDot('同期済 ✓','#3a8a2a'); return; }
+      try{ applyRemote(d); }catch(e){ console.error(e); }
+      setSyncDot('同期済 ✓','#3a8a2a');
+    },err=>{setSyncDot('接続失敗','#c0392b');console.error(err);});
+  }catch(e){setSyncDot('初期化失敗','#c0392b');console.error(e);}
+}
+setInterval(pushIfChanged,2000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden')pushIfChanged(); });
+window.addEventListener('pagehide',pushIfChanged);
+
+init();
+initFirebase();
+</script>
+</body>
+</html>
