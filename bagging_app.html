@@ -59,6 +59,7 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 <div class="tabs">
   <button class="tab-btn active" onclick="showPage('input',event)">✏️ 入力</button>
   <button class="tab-btn" onclick="showPage('list',event)">📋 履歴</button>
+  <button class="tab-btn" onclick="showPage('stock',event)">📦 残数</button>
   <button class="tab-btn" onclick="showPage('summary',event)">📊 集計</button>
 </div>
 
@@ -76,9 +77,23 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 
   <div class="card">
     <div class="card-title">🛍️ 袋種</div>
-    <select id="bag-type">
+    <select id="bag-type" onchange="onBagTypeChange()">
       <option value="">選択してください</option>
     </select>
+    <div id="bag-other-wrap" style="display:none;margin-top:8px;">
+      <input type="text" id="bag-other" placeholder="袋種を入力（保存すると候補に追加されます）" style="font-size:0.85rem;">
+    </div>
+    <div style="margin-top:10px;text-align:right;">
+      <span onclick="toggleBagManage()" style="font-size:0.78rem;color:var(--blue);cursor:pointer;">⚙ 袋種の追加・並べ替え・削除</span>
+    </div>
+    <div id="bag-manage" style="display:none;margin-top:8px;border-top:1px solid var(--border);padding-top:10px;">
+      <div class="note" style="margin-bottom:6px;">▲▼で並べ替え、✕で削除（「その他」は常に最後）</div>
+      <div id="bag-manage-list"></div>
+      <div style="display:flex;gap:6px;margin-top:8px;">
+        <input type="text" id="new-bag" placeholder="袋種を追加" style="font-size:0.85rem;">
+        <button class="btn-today" onclick="addBag()">＋追加</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -150,10 +165,55 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
   <div id="list-content"></div>
 </div>
 
+<!-- 残数ページ -->
+<div id="page-stock" class="page">
+  <div class="date-nav">
+    <input type="date" id="stock-date">
+    <button class="btn-today" onclick="stockToday()">今日</button>
+  </div>
+  <div class="card">
+    <div class="card-title">📦 袋種ごとの残数を記録</div>
+    <label>袋種</label>
+    <select id="stock-bag"></select>
+    <div style="margin-top:10px;">
+      <label>残数（枚）</label>
+      <div class="count-row">
+        <button class="count-btn" onclick="stockAdjust(-100)">－</button>
+        <input type="number" id="stock-count" class="count-input" placeholder="0" inputmode="numeric">
+        <button class="count-btn" onclick="stockAdjust(100)">＋</button>
+      </div>
+      <div class="quick-add">
+        <button class="quick-btn" onclick="stockAdjust(100)">+100</button>
+        <button class="quick-btn" onclick="stockAdjust(500)">+500</button>
+        <button class="quick-btn" onclick="stockAdjust(1000)">+1000</button>
+      </div>
+    </div>
+    <button class="btn-save" style="margin-top:10px;" onclick="saveStock()">💾 残数を記録</button>
+    <div class="save-msg" id="stock-msg">✅ 記録しました！</div>
+  </div>
+  <div class="card">
+    <div class="card-title">📋 袋種別 最新残数</div>
+    <div id="stock-latest"></div>
+  </div>
+  <div class="card">
+    <div class="card-title">🕘 残数の記録履歴</div>
+    <div id="stock-history"></div>
+  </div>
+</div>
+
 <!-- 集計ページ -->
 <div id="page-summary" class="page">
   <div class="card">
-    <div class="card-title">📊 品種別 累計枚数（今年度）</div>
+    <div class="card-title">📊 集計</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px;">
+      <input type="number" id="sum-year" inputmode="numeric" oninput="renderSummary()" style="width:96px;">
+      <select id="sum-group" onchange="renderSummary()" style="flex:1;">
+        <option value="variety">品種ごと</option>
+        <option value="bagType">袋種ごと</option>
+        <option value="field">園地ごと</option>
+        <option value="block">区画ごと</option>
+      </select>
+    </div>
     <div id="summary-content"></div>
   </div>
   <div class="card">
@@ -173,7 +233,73 @@ const GAS_URL = '';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
 const VARIETIES = ['愛甘水','甘ひびき','あきあかり','あきづき','豊水','南水','甘太','かおり','秋麗','新高','ヤーリー','その他'];
-const BAG_TYPES = ['17XL','W5XL','乳白特大止付','乳白特特大','乳白特特大止付','オレンジ','透明','S42BBXL','42XL','ZS特大','ZS特特大','S42BB2L','517','その他'];
+const DEFAULT_BAG_TYPES = ['17XL','W5XL','乳白特大止付','乳白特特大','乳白特特大止付','オレンジ','透明','S42BBXL','42XL','ZS特大','ZS特特大','ZS17','S42BB2L','517','その他'];
+const BAG_KEY = 'kajiwara_bagging_bagtypes_v1';
+let bagTypes = JSON.parse(localStorage.getItem(BAG_KEY) || 'null') || DEFAULT_BAG_TYPES.slice();
+if(!bagTypes.includes('その他')) bagTypes.push('その他');
+const STOCK_KEY = 'kajiwara_bagging_stock_v1';
+let stockRecords = JSON.parse(localStorage.getItem(STOCK_KEY) || '[]');
+
+// 「その他」を末尾に保ちつつ袋種を追加
+function addBagTypeValue(name){
+  if(!name || bagTypes.includes(name)) return false;
+  const i=bagTypes.indexOf('その他');
+  if(i>=0) bagTypes.splice(i,0,name); else bagTypes.push(name);
+  localStorage.setItem(BAG_KEY, JSON.stringify(bagTypes));
+  return true;
+}
+function populateBagSelects(){
+  const bt=document.getElementById('bag-type');
+  const cur=bt.value;
+  bt.innerHTML='<option value="">選択してください</option>'+bagTypes.map(t=>`<option>${t}</option>`).join('');
+  if(bagTypes.includes(cur)||cur==='') bt.value=cur;
+  const sb=document.getElementById('stock-bag');
+  if(sb){ const c2=sb.value; sb.innerHTML=bagTypes.filter(t=>t!=='その他').map(t=>`<option>${t}</option>`).join(''); if(bagTypes.includes(c2)) sb.value=c2; }
+}
+function onBagTypeChange(){
+  document.getElementById('bag-other-wrap').style.display =
+    (document.getElementById('bag-type').value==='その他') ? 'block' : 'none';
+}
+
+// 袋種の管理（追加・並べ替え・削除）
+let bagManageOpen=false;
+function toggleBagManage(){
+  bagManageOpen=!bagManageOpen;
+  document.getElementById('bag-manage').style.display=bagManageOpen?'block':'none';
+  if(bagManageOpen) renderBagManage();
+}
+function workingBags(){ return bagTypes.filter(t=>t!=='その他'); }
+function commitBags(list){
+  bagTypes=[...list,'その他'];
+  localStorage.setItem(BAG_KEY,JSON.stringify(bagTypes));
+  populateBagSelects(); renderBagManage();
+}
+function renderBagManage(){
+  const el=document.getElementById('bag-manage-list'); if(!el)return;
+  const list=workingBags();
+  const bs='width:30px;height:30px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;';
+  el.innerHTML=list.map((w,i)=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #f0f0f0;">
+      <span style="flex:1;font-size:0.85rem;">${w}</span>
+      <button onclick="moveBag(${i},-1)" ${i===0?'disabled':''} style="${bs}${i===0?'opacity:0.3;':''}">▲</button>
+      <button onclick="moveBag(${i},1)" ${i===list.length-1?'disabled':''} style="${bs}${i===list.length-1?'opacity:0.3;':''}">▼</button>
+      <button onclick="delBag(${i})" style="width:30px;height:30px;border:1px solid #f0c0c0;border-radius:6px;background:#fff;color:#c0392b;cursor:pointer;">✕</button>
+    </div>`).join('');
+}
+function moveBag(i,dir){
+  const list=workingBags(); const j=i+dir; if(j<0||j>=list.length)return;
+  const t=list[i]; list[i]=list[j]; list[j]=t; commitBags(list);
+}
+function delBag(i){
+  const list=workingBags(); const w=list[i];
+  if(!confirm(`袋種候補「${w}」を削除しますか？\n（過去の記録は残ります）`))return;
+  list.splice(i,1); commitBags(list);
+}
+function addBag(){
+  const el=document.getElementById('new-bag'); const n=el.value.trim(); if(!n)return;
+  if(bagTypes.includes(n)){alert('もうあります');return;}
+  addBagTypeValue(n); el.value=''; populateBagSelects(); renderBagManage();
+}
 
 function init(){
   const vb = document.getElementById('variety-btns');
@@ -183,9 +309,10 @@ function init(){
     b.onclick=()=>{document.querySelectorAll('#variety-btns .opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');updateCum();};
     vb.appendChild(b);
   });
-  const bt=document.getElementById('bag-type');
-  BAG_TYPES.forEach(t=>{const o=document.createElement('option');o.textContent=t;bt.appendChild(o);});
+  populateBagSelects();
   setToday();
+  stockToday();
+  document.getElementById('sum-year').value=new Date().getFullYear();
 }
 
 function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
@@ -197,6 +324,67 @@ function showPage(name,e){
   e.target.classList.add('active');
   if(name==='list')renderList();
   if(name==='summary')renderSummary();
+  if(name==='stock'){ renderStockLatest(); renderStockHistory(); }
+}
+
+// ====== 残数（袋種ごと） ======
+function stockToday(){document.getElementById('stock-date').value=new Date().toISOString().slice(0,10);}
+function stockAdjust(n){
+  const el=document.getElementById('stock-count');
+  el.value=Math.max(0,(parseInt(el.value)||0)+n);
+}
+function saveStock(){
+  const date=document.getElementById('stock-date').value;
+  const bag=document.getElementById('stock-bag').value;
+  const cnt=parseInt(document.getElementById('stock-count').value);
+  if(!date){alert('日付を選んでください');return;}
+  if(!bag){alert('袋種を選んでください');return;}
+  if(isNaN(cnt)||cnt<0){alert('残数を入力してください');return;}
+  const ex=stockRecords.find(s=>s.date===date&&s.bagType===bag);
+  if(ex){ ex.remaining=cnt; } else { stockRecords.push({id:Date.now(),date,bagType:bag,remaining:cnt}); }
+  localStorage.setItem(STOCK_KEY,JSON.stringify(stockRecords));
+  const m=document.getElementById('stock-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2000);
+  document.getElementById('stock-count').value='';
+  renderStockLatest(); renderStockHistory();
+}
+function delStock(id){
+  if(!confirm('この残数記録を削除しますか？'))return;
+  stockRecords=stockRecords.filter(s=>s.id!==id);
+  localStorage.setItem(STOCK_KEY,JSON.stringify(stockRecords));
+  renderStockLatest(); renderStockHistory();
+}
+function renderStockLatest(){
+  const el=document.getElementById('stock-latest');
+  if(!stockRecords.length){el.innerHTML='<div class="empty">まだ残数記録がありません</div>';return;}
+  const byBag={};
+  stockRecords.forEach(s=>{ (byBag[s.bagType]=byBag[s.bagType]||[]).push(s); });
+  const rows=Object.keys(byBag).map(bag=>{
+    const list=byBag[bag].slice().sort((a,b)=>a.date.localeCompare(b.date));
+    const latest=list[list.length-1];
+    const prev=list.length>1?list[list.length-2]:null;
+    const used=prev?(prev.remaining-latest.remaining):null;
+    return {bag,latest,used};
+  }).sort((a,b)=>a.bag.localeCompare(b.bag));
+  el.innerHTML=rows.map(r=>{
+    const[,m,d]=r.latest.date.split('-');
+    const usedStr=r.used!=null?`　前回比 ${r.used>=0?'−':'＋'}${Math.abs(r.used).toLocaleString()}枚`:'';
+    return`<div class="summary-row">
+      <div><div style="font-weight:600">${r.bag}</div><div style="font-size:0.72rem;color:var(--text-light)">${+m}/${+d}時点${usedStr}</div></div>
+      <span class="v">残 ${r.latest.remaining.toLocaleString()}枚</span>
+    </div>`;
+  }).join('');
+}
+function renderStockHistory(){
+  const el=document.getElementById('stock-history');
+  if(!stockRecords.length){el.innerHTML='<div class="empty">記録なし</div>';return;}
+  const sorted=[...stockRecords].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  el.innerHTML=sorted.map(s=>{
+    const[y,m,d]=s.date.split('-');
+    return`<div class="summary-row">
+      <div><span style="font-size:0.8rem;color:var(--green);font-weight:600">${y}/${+m}/${+d}</span>　<span>${s.bagType}</span></div>
+      <div><span class="v">${s.remaining.toLocaleString()}枚</span> <span style="color:#ccc;cursor:pointer;margin-left:8px" onclick="delStock(${s.id})">✕</span></div>
+    </div>`;
+  }).join('');
 }
 
 function addCount(n){
@@ -229,9 +417,16 @@ function saveRecord(){
   if(!date){alert('日付を選んでください');return;}
   if(!variety){alert('品種を選んでください');return;}
   if(count<=0){alert('枚数を入力してください');return;}
+  // 袋種：その他なら自由入力を使い、候補に追加
+  let bag=document.getElementById('bag-type').value;
+  if(bag==='その他'){
+    bag=document.getElementById('bag-other').value.trim();
+    if(!bag){alert('袋種を入力してください');return;}
+    if(addBagTypeValue(bag)){ populateBagSelects(); }
+  }
   const rec={
     id:Date.now(),date,variety,count,
-    bagType:document.getElementById('bag-type').value,
+    bagType:bag,
     field:document.getElementById('field').value,
     block:document.getElementById('block').value,
     workers:document.getElementById('workers').value,
@@ -245,6 +440,9 @@ function saveRecord(){
   // リセット（品種と園地は残す＝連続入力しやすく）
   document.getElementById('count').value='';
   document.getElementById('note').value='';
+  document.getElementById('bag-other').value='';
+  document.getElementById('bag-other-wrap').style.display='none';
+  if(document.getElementById('bag-type').value==='その他') document.getElementById('bag-type').value=bag;
   updateCum();
 }
 
@@ -300,15 +498,22 @@ function delRec(id){
 }
 
 function renderSummary(){
-  const yr=new Date().getFullYear();
+  const yr=parseInt(document.getElementById('sum-year').value)||new Date().getFullYear();
+  const group=document.getElementById('sum-group').value||'variety';
   const el=document.getElementById('summary-content');
-  let total=0;
-  const rows=VARIETIES.map(v=>{
-    const sum=records.filter(r=>r.variety===v && new Date(r.date).getFullYear()===yr).reduce((s,r)=>s+(r.count||0),0);
-    total+=sum;
-    return sum>0?`<div class="summary-row"><span>${v}</span><span class="v">${sum.toLocaleString()}枚</span></div>`:'';
-  }).join('');
-  el.innerHTML=(rows||'<div class="empty">今年度の記録なし</div>')+
+  const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
+  if(!filtered.length){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
+  const labelMap={variety:'品種',bagType:'袋種',field:'園地',block:'区画'};
+  const map={}; let total=0;
+  filtered.forEach(r=>{
+    let key=r[group];
+    if(!key||key==='') key='(未設定)';
+    map[key]=(map[key]||0)+(r.count||0);
+    total+=(r.count||0);
+  });
+  const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  el.innerHTML=`<div class="note" style="margin-bottom:8px;">${yr}年・${labelMap[group]}ごとの袋かけ枚数</div>`+
+    arr.map(([k,v])=>`<div class="summary-row"><span>${k}</span><span class="v">${v.toLocaleString()}枚</span></div>`).join('')+
     `<div class="summary-row" style="border-top:2px solid var(--green);margin-top:4px"><span style="font-weight:700">合計</span><span class="v" style="font-size:1.1rem">${total.toLocaleString()}枚</span></div>`;
 }
 
