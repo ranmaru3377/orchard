@@ -48,6 +48,12 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 .summary-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee;font-size:0.85rem;}
 .summary-row .v{font-weight:600;color:var(--green);}
 .note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+.grand-total{display:flex;justify-content:space-between;align-items:center;background:var(--green);color:#fff;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-weight:700;}
+.grand-total .gt-v{font-size:1.2rem;}
+#list-content table{width:100%;border-collapse:collapse;font-size:0.78rem;min-width:540px;}
+#list-content th{background:var(--green-pale);color:var(--green);padding:7px 6px;text-align:left;white-space:nowrap;position:sticky;top:0;}
+#list-content td{padding:6px 6px;border-bottom:1px solid #eee;}
+#list-content input.cell-num{width:74px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:0.78rem;font-family:inherit;}
 </style>
 </head>
 <body>
@@ -82,6 +88,28 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
     </select>
     <div id="bag-other-wrap" style="display:none;margin-top:8px;">
       <input type="text" id="bag-other" placeholder="袋種を入力（保存すると候補に追加されます）" style="font-size:0.85rem;">
+    </div>
+    <div id="bag-prev-stock" style="display:none;margin-top:8px;font-size:0.82rem;color:var(--blue);background:#e8f1fb;border-radius:8px;padding:8px 10px;font-weight:600;"></div>
+    <div id="bag-calc" style="display:none;margin-top:8px;background:#f6faf2;border:1px solid var(--green-pale);border-radius:10px;padding:11px;">
+      <div style="font-size:0.74rem;color:var(--text-light);margin-bottom:4px;">📦 補充数（この袋種を足した枚数）</div>
+      <div class="count-row">
+        <button class="count-btn" onclick="adjReplenish(-100)">－</button>
+        <input type="number" id="replenish" class="count-input" placeholder="0" inputmode="numeric" oninput="recalcBagging()">
+        <button class="count-btn" onclick="adjReplenish(100)">＋</button>
+      </div>
+      <div class="quick-add">
+        <button class="quick-btn" onclick="adjReplenish(2000)">+2000</button>
+        <button class="quick-btn" onclick="adjReplenish(3000)">+3000</button>
+        <button class="quick-btn" onclick="adjReplenish(100)">+100</button>
+      </div>
+      <div style="font-size:0.74rem;color:var(--text-light);margin:11px 0 4px;">📦 当日（作業後）の残数</div>
+      <div class="count-row">
+        <button class="count-btn" onclick="adjToday(-100)">－</button>
+        <input type="number" id="today-stock" class="count-input" placeholder="0" inputmode="numeric" oninput="recalcBagging()">
+        <button class="count-btn" onclick="adjToday(100)">＋</button>
+      </div>
+      <div id="bag-calc-result" style="margin-top:11px;font-size:0.82rem;color:var(--blue);line-height:1.6;">当日の残数を入れると袋掛け枚数を自動計算します</div>
+      <button class="btn-today" style="width:100%;margin-top:8px;" onclick="applyBaggingCalc()">✅ 枚数に反映＋当日残数を記録</button>
     </div>
     <div style="margin-top:10px;text-align:right;">
       <span onclick="toggleBagManage()" style="font-size:0.78rem;color:var(--blue);cursor:pointer;">⚙ 袋種の追加・並べ替え・削除</span>
@@ -155,7 +183,7 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
     <input type="text" id="note" placeholder="例：中北エリア完了、明日続き">
   </div>
 
-  <button class="btn-save" onclick="saveRecord()">💾 保存する</button>
+  <button class="btn-save" id="save-btn" onclick="saveRecord()">💾 保存する</button>
   <div class="save-msg" id="save-msg">✅ 保存しました！</div>
   <div class="sync-status" id="sync-status"></div>
 </div>
@@ -205,6 +233,7 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 <div id="page-summary" class="page">
   <div class="card">
     <div class="card-title">📊 集計</div>
+    <div class="grand-total"><span>総累計（全期間）</span><span class="gt-v" id="grand-total">0枚</span></div>
     <div style="display:flex;gap:8px;margin-bottom:10px;">
       <input type="number" id="sum-year" inputmode="numeric" oninput="renderSummary()" style="width:96px;">
       <select id="sum-group" onchange="renderSummary()" style="flex:1;">
@@ -212,6 +241,7 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
         <option value="bagType">袋種ごと</option>
         <option value="field">園地ごと</option>
         <option value="block">区画ごと</option>
+        <option value="date">日付ごと</option>
       </select>
     </div>
     <div id="summary-content"></div>
@@ -259,6 +289,56 @@ function populateBagSelects(){
 function onBagTypeChange(){
   document.getElementById('bag-other-wrap').style.display =
     (document.getElementById('bag-type').value==='その他') ? 'block' : 'none';
+  updateBagPrevStock();
+}
+let prevStockVal=0;
+function updateBagPrevStock(){
+  const v=document.getElementById('bag-type').value;
+  const prevEl=document.getElementById('bag-prev-stock');
+  const calcEl=document.getElementById('bag-calc');
+  if(!v || v==='その他'){ prevEl.style.display='none'; calcEl.style.display='none'; return; }
+  calcEl.style.display='block';
+  const recDate=document.getElementById('rec-date').value||'9999-99-99';
+  // 選択日より前の最新残数（前日・前回）。なければ最新の残数。
+  const all=stockRecords.filter(s=>s.bagType===v).sort((a,b)=>a.date.localeCompare(b.date));
+  const before=all.filter(s=>s.date < recDate);
+  const ref=before.length ? before[before.length-1] : (all.length ? all[all.length-1] : null);
+  prevStockVal = ref ? ref.remaining : 0;
+  prevEl.style.display='block';
+  if(ref){
+    const[,m,d]=ref.date.split('-');
+    prevEl.textContent=`📦 前回残数：${ref.remaining.toLocaleString()}枚（${+m}/${+d}時点）`;
+  } else {
+    prevEl.textContent='📦 前回残数：記録なし（0として計算）';
+  }
+  recalcBagging();
+}
+function adjReplenish(n){ const el=document.getElementById('replenish'); el.value=Math.max(0,(parseInt(el.value)||0)+n); recalcBagging(); }
+function adjToday(n){ const el=document.getElementById('today-stock'); el.value=Math.max(0,(parseInt(el.value)||0)+n); recalcBagging(); }
+function recalcBagging(){
+  const rep=parseInt(document.getElementById('replenish').value)||0;
+  const todayStr=document.getElementById('today-stock').value;
+  const resEl=document.getElementById('bag-calc-result');
+  if(todayStr===''){ resEl.textContent='当日の残数を入れると袋掛け枚数を自動計算します'; return; }
+  const today=parseInt(todayStr)||0;
+  const used=prevStockVal+rep-today;
+  resEl.innerHTML=`袋掛け枚数 ＝ 前回 ${prevStockVal.toLocaleString()} ＋ 補充 ${rep.toLocaleString()} − 当日残 ${today.toLocaleString()} ＝ <b style="font-size:1.05rem">${used.toLocaleString()}枚</b>`;
+  if(used>=0){ document.getElementById('count').value=used; updateCum(); }
+  else { resEl.innerHTML+='<br><span style="color:#c0392b;">※ マイナスです。前回残数・補充・当日残を確認してください</span>'; }
+}
+function applyBaggingCalc(){
+  const date=document.getElementById('rec-date').value;
+  const bag=document.getElementById('bag-type').value;
+  if(!bag||bag==='その他'){alert('袋種を選んでください');return;}
+  const todayStr=document.getElementById('today-stock').value;
+  if(todayStr===''){alert('当日（作業後）の残数を入力してください');return;}
+  recalcBagging();
+  const cnt=parseInt(todayStr)||0;
+  const ex=stockRecords.find(s=>s.date===date&&s.bagType===bag);
+  if(ex){ ex.remaining=cnt; } else { stockRecords.push({id:Date.now(),date,bagType:bag,remaining:cnt}); }
+  localStorage.setItem(STOCK_KEY,JSON.stringify(stockRecords));
+  if(document.getElementById('stock-latest')){ renderStockLatest(); renderStockHistory(); }
+  alert('✅ 袋掛け枚数に反映し、当日残数（'+bag+'）を記録しました');
 }
 
 // 袋種の管理（追加・並べ替え・削除）
@@ -313,6 +393,7 @@ function init(){
   setToday();
   stockToday();
   document.getElementById('sum-year').value=new Date().getFullYear();
+  document.getElementById('rec-date').addEventListener('change',()=>{ updateCum(); updateBagPrevStock(); });
 }
 
 function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
@@ -425,7 +506,7 @@ function saveRecord(){
     if(addBagTypeValue(bag)){ populateBagSelects(); }
   }
   const rec={
-    id:Date.now(),date,variety,count,
+    id: editingId || Date.now(), date, variety, count,
     bagType:bag,
     field:document.getElementById('field').value,
     block:document.getElementById('block').value,
@@ -433,9 +514,15 @@ function saveRecord(){
     hours:document.getElementById('hours').value,
     note:document.getElementById('note').value.trim()
   };
-  records.push(rec);
+  if(editingId){
+    records=records.map(r=>r.id===editingId?rec:r);
+    editingId=null;
+    const btn=document.getElementById('save-btn'); btn.textContent='💾 保存する'; btn.style.background='';
+  } else {
+    records.push(rec);
+    syncOne(rec);
+  }
   localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
-  syncOne(rec);
   const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2500);
   // リセット（品種と園地は残す＝連続入力しやすく）
   document.getElementById('count').value='';
@@ -469,25 +556,65 @@ async function syncAll(){
 
 function setSync(id,msg){const el=document.getElementById(id);if(el)el.textContent=msg;}
 
+function esc(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
 function renderList(){
   const el=document.getElementById('list-content');
   if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
   const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
-  el.innerHTML=sorted.map(r=>{
+  const total=sorted.reduce((s,r)=>s+(r.count||0),0);
+  let html='<div class="note" style="margin-bottom:6px;">枚数は直接書き換えできます。✏️で全項目を編集、✕で削除。</div>';
+  html+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table>';
+  html+='<tr><th>日付</th><th>品種</th><th>袋種</th><th>園地</th><th>区画</th><th style="text-align:right;">枚数</th><th>操作</th></tr>';
+  html+=sorted.map(r=>{
     const[y,m,d]=r.date.split('-');
-    let chips='';
-    if(r.bagType)chips+=`<span class="chip">${r.bagType}</span>`;
-    if(r.field)chips+=`<span class="chip">${r.field}</span>`;
-    if(r.block)chips+=`<span class="chip">${r.block}</span>`;
-    if(r.workers)chips+=`<span class="chip">👥${r.workers}人</span>`;
-    if(r.hours)chips+=`<span class="chip">⏱️${r.hours}h</span>`;
-    return`<div class="list-item">
-      <div class="list-date">${y}年${+m}月${+d}日　${r.variety}　<span style="color:#1565c0">${r.count.toLocaleString()}枚</span>
-        <span style="float:right;color:#ccc;cursor:pointer" onclick="delRec(${r.id})">✕</span></div>
-      <div class="list-detail">${chips}</div>
-      ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
-    </div>`;
+    return `<tr>
+      <td style="white-space:nowrap;">${+m}/${+d}</td>
+      <td>${esc(r.variety)}</td>
+      <td style="white-space:nowrap;">${esc(r.bagType)}</td>
+      <td>${esc(r.field)}</td>
+      <td>${esc(r.block)}</td>
+      <td style="text-align:right;"><input type="number" class="cell-num" value="${r.count||0}" onchange="editCount(${r.id},this.value)"></td>
+      <td style="white-space:nowrap;"><span style="color:#1565c0;cursor:pointer;font-size:0.95rem;" onclick="editRec(${r.id})">✏️</span> <span style="color:#ccc;cursor:pointer;font-size:0.95rem;margin-left:6px;" onclick="delRec(${r.id})">✕</span></td>
+    </tr>`;
   }).join('');
+  html+=`<tr style="border-top:2px solid var(--green);font-weight:700;background:#f6faf2;"><td colspan="5" style="text-align:right;">合計</td><td style="text-align:right;">${total.toLocaleString()}</td><td></td></tr>`;
+  html+='</table></div>';
+  el.innerHTML=html;
+}
+
+function editCount(id,val){
+  const r=records.find(x=>x.id===id); if(!r)return;
+  const n=parseInt(val);
+  if(isNaN(n)||n<0){ renderList(); return; }
+  r.count=n;
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
+}
+
+let editingId=null;
+function editRec(id){
+  const r=records.find(x=>x.id===id); if(!r)return;
+  editingId=id;
+  document.getElementById('rec-date').value=r.date;
+  document.querySelectorAll('#variety-btns .opt').forEach(b=>b.classList.toggle('selected', b.textContent===r.variety));
+  if(r.bagType && !bagTypes.includes(r.bagType)){ addBagTypeValue(r.bagType); populateBagSelects(); }
+  document.getElementById('bag-type').value=bagTypes.includes(r.bagType)?r.bagType:'';
+  onBagTypeChange();
+  document.getElementById('field').value=r.field||'';
+  document.getElementById('block').value=r.block||'';
+  document.getElementById('count').value=r.count||'';
+  document.getElementById('workers').value=r.workers||'';
+  document.getElementById('hours').value=r.hours||'';
+  document.getElementById('note').value=r.note||'';
+  updateCum();
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 この内容で更新する'; btn.style.background='#1565c0';
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-input').classList.add('active');
+  document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function delRec(id){
@@ -501,9 +628,12 @@ function renderSummary(){
   const yr=parseInt(document.getElementById('sum-year').value)||new Date().getFullYear();
   const group=document.getElementById('sum-group').value||'variety';
   const el=document.getElementById('summary-content');
+  // 総累計（全期間・全記録）
+  const grand=records.reduce((s,r)=>s+(r.count||0),0);
+  const gt=document.getElementById('grand-total'); if(gt) gt.textContent=grand.toLocaleString()+'枚';
   const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
   if(!filtered.length){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
-  const labelMap={variety:'品種',bagType:'袋種',field:'園地',block:'区画'};
+  const labelMap={variety:'品種',bagType:'袋種',field:'園地',block:'区画',date:'日付'};
   const map={}; let total=0;
   filtered.forEach(r=>{
     let key=r[group];
@@ -511,10 +641,13 @@ function renderSummary(){
     map[key]=(map[key]||0)+(r.count||0);
     total+=(r.count||0);
   });
-  const arr=Object.entries(map).sort((a,b)=>b[1]-a[1]);
+  let arr=Object.entries(map);
+  if(group==='date'){ arr.sort((a,b)=>b[0].localeCompare(a[0])); }   // 日付は新しい順
+  else { arr.sort((a,b)=>b[1]-a[1]); }                              // それ以外は多い順
+  const fmtKey=(k)=>{ if(group==='date' && /^\d{4}-\d{2}-\d{2}$/.test(k)){ const[,m,d]=k.split('-'); return `${+m}/${+d}`; } return k; };
   el.innerHTML=`<div class="note" style="margin-bottom:8px;">${yr}年・${labelMap[group]}ごとの袋かけ枚数</div>`+
-    arr.map(([k,v])=>`<div class="summary-row"><span>${k}</span><span class="v">${v.toLocaleString()}枚</span></div>`).join('')+
-    `<div class="summary-row" style="border-top:2px solid var(--green);margin-top:4px"><span style="font-weight:700">合計</span><span class="v" style="font-size:1.1rem">${total.toLocaleString()}枚</span></div>`;
+    arr.map(([k,v])=>`<div class="summary-row"><span>${fmtKey(k)}</span><span class="v">${v.toLocaleString()}枚</span></div>`).join('')+
+    `<div class="summary-row" style="border-top:2px solid var(--green);margin-top:4px"><span style="font-weight:700">${yr}年 合計</span><span class="v" style="font-size:1.1rem">${total.toLocaleString()}枚</span></div>`;
 }
 
 init();
