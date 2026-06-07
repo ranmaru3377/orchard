@@ -194,6 +194,7 @@ let records = [];
 let persons = ['自分'];
 let selPerson='', selWork='', selField='';
 let seg='person';
+let editingId=null;
 
 // ====== 初期化 ======
 function init(){
@@ -252,9 +253,10 @@ function renderPersonBtns(){
 function addPerson(){
   const el=document.getElementById('new-person');
   const n=el.value.trim();
-  if(!n)return;
-  if(persons.includes(n)){alert('もう登録されています');return;}
+  if(!n){ return; }
+  if(persons.includes(n)){ selPerson=n; renderPersonBtns(); el.value=''; return; }
   persons.push(n);
+  selPerson=n;   // 追加した人を自動で選択（取り違え防止）
   el.value='';
   renderPersonBtns();
   scheduleSync();
@@ -295,11 +297,13 @@ function saveRecord(){
   if(work==='その他'){ const o=document.getElementById('work-other').value.trim(); work=o||'その他'; }
   const h=calcHours();
   if(h<=0){alert('勤務時間を正しく入力してください');return;}
-  const rec={ id:Date.now()+Math.floor(Math.random()*1000), date, person:selPerson, work,
+  const rec={ id: editingId || (Date.now()+Math.floor(Math.random()*1000)), date, person:selPerson, work,
     field:selField, start:document.getElementById('start').value, end:document.getElementById('end').value,
     breakMin:document.getElementById('break').value, hours:+h.toFixed(2),
     note:document.getElementById('note').value.trim() };
-  records.push(rec);
+  if(editingId){ records=records.map(r=>r.id===editingId?rec:r); editingId=null;
+    const btn=document.getElementById('save-btn'); btn.textContent='💾 保存する'; btn.style.background='';
+  } else { records.push(rec); }
   scheduleSync();
   const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2000);
   // 連続入力しやすく：人と作業は残す、備考クリア
@@ -311,6 +315,34 @@ function delRec(id){
   records=records.filter(r=>r.id!==id);
   scheduleSync();
   renderList();
+}
+
+function selectBtnByText(containerId, text){
+  document.querySelectorAll('#'+containerId+' .opt').forEach(b=>{
+    b.classList.toggle('selected', b.textContent===text);
+  });
+}
+
+function editRec(id){
+  const r=records.find(x=>x.id===id); if(!r)return;
+  editingId=id;
+  document.getElementById('rec-date').value=r.date;
+  selPerson=r.person; renderPersonBtns();
+  selWork=r.work; selectBtnByText('work-btns', r.work);
+  selField=r.field||''; selectBtnByText('field-btns', r.field||'');
+  document.getElementById('start').value=r.start||'08:00';
+  document.getElementById('end').value=r.end||'17:00';
+  document.getElementById('break').value=r.breakMin||'60';
+  document.getElementById('note').value=r.note||'';
+  updateCalc();
+  const btn=document.getElementById('save-btn');
+  btn.textContent='💾 この内容で更新する'; btn.style.background='#1565c0';
+  // 入力タブへ
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-input').classList.add('active');
+  document.querySelectorAll('.tab-btn')[0].classList.add('active');
+  window.scrollTo({top:0,behavior:'smooth'});
 }
 
 function fmtH(h){ return (Math.round(h*10)/10).toLocaleString()+'h'; }
@@ -333,7 +365,10 @@ function renderList(){
     chips+=`<span class="chip">${r.start||''}〜${r.end||''}</span>`;
     return`<div class="list-item">
       <div class="list-date">${y}年${+m}月${+d}日　<span style="color:var(--blue)">実働${fmtH(r.hours)}</span>
-        <span class="del-x" onclick="delRec(${r.id})">✕</span></div>
+        <span style="float:right;display:flex;gap:12px;align-items:center;">
+          <span style="color:#1565c0;cursor:pointer;font-size:0.78rem;" onclick="editRec(${r.id})">✏️編集</span>
+          <span class="del-x" style="float:none;" onclick="delRec(${r.id})">✕</span>
+        </span></div>
       <div class="list-detail">${chips}</div>
       ${r.note?`<div class="list-detail" style="color:#888">📝${r.note}</div>`:''}
     </div>`;
