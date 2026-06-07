@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>梶原果樹園 書類管理</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+const FIREBASE_PATH = "kajiwara_docs";
+// ★★★ Googleドライブ保存用のGAS URL（後で貼り付け） ★★★
+const GAS_URL = "https://script.google.com/macros/s/AKfycbyWB-NK9UNHlC_GYSGDIJkOZHRsyUz8bvFmCb8YdwqNWsuI5LzCu9NRwnjOCfIZCJ-U/exec";
+</script>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--red:#c0392b;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+#sync-dot{font-size:0.7rem;padding:4px 10px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;margin-left:auto;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.82rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:14px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:12px;}
+.card-title{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:10px;}
+.date-nav{display:flex;gap:8px;margin-bottom:12px;}
+.date-nav input{flex:1;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.9rem;font-family:inherit;}
+.btn-today{padding:9px 14px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.btn-group{display:flex;flex-wrap:wrap;gap:6px;}
+.opt{padding:9px 13px;border:1.5px solid var(--border);background:#fff;border-radius:20px;font-size:0.85rem;cursor:pointer;font-family:inherit;}
+.opt.selected{background:var(--green-pale);border-color:var(--green-mid);color:var(--green);font-weight:600;}
+label{font-size:0.74rem;color:var(--text-light);display:block;margin-bottom:4px;}
+input[type=text],input[type=date],select{width:100%;padding:9px 10px;border:1.5px solid var(--border);border-radius:8px;font-size:0.95rem;font-family:inherit;}
+.btn-save{width:100%;padding:15px;background:var(--green);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;}
+.btn-save:disabled{opacity:0.5;}
+.save-msg{text-align:center;color:var(--green);font-weight:600;font-size:0.88rem;margin-top:10px;min-height:1.2em;}
+.upload-area{border:2px dashed var(--border);border-radius:10px;padding:20px 12px;text-align:center;cursor:pointer;background:#fafafa;}
+.upload-area:active{background:var(--green-pale);border-color:var(--green-mid);}
+.upload-area .ic{font-size:2rem;margin-bottom:6px;}
+.upload-area .lb{font-size:0.85rem;color:var(--text-light);}
+.upload-area .sb{font-size:0.72rem;color:#aaa;margin-top:3px;}
+.preview-box{margin-top:10px;text-align:center;}
+.preview-box img{max-width:100%;max-height:240px;border-radius:8px;border:1px solid var(--border);}
+.preview-pdf{display:inline-flex;align-items:center;gap:8px;padding:12px 16px;background:#fbe9e7;border:1px solid #ef9a9a;border-radius:8px;font-size:0.85rem;color:var(--red);}
+.empty{text-align:center;color:var(--text-light);padding:30px;font-size:0.88rem;line-height:1.8;}
+.notice{background:#fff8e1;border:1px solid #f0c040;border-radius:8px;padding:10px 12px;font-size:0.78rem;color:#9a6a00;line-height:1.7;margin-bottom:12px;}
+/* 一覧 */
+.filter-row{display:flex;gap:8px;margin-bottom:12px;}
+.filter-row select,.filter-row input{flex:1;}
+.doc-item{display:flex;gap:10px;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px;align-items:center;}
+.doc-thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;background:#eee;flex-shrink:0;border:1px solid var(--border);}
+.doc-icon{width:56px;height:56px;border-radius:8px;background:#fbe9e7;display:flex;align-items:center;justify-content:center;font-size:1.6rem;flex-shrink:0;}
+.doc-body{flex:1;min-width:0;}
+.doc-title{font-size:0.9rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.doc-meta{font-size:0.72rem;color:var(--text-light);margin-top:2px;}
+.doc-cat{display:inline-block;font-size:0.68rem;background:var(--green-pale);color:var(--green);padding:1px 7px;border-radius:8px;margin-top:3px;}
+.doc-actions{display:flex;flex-direction:column;gap:6px;flex-shrink:0;}
+.doc-open{padding:7px 10px;background:var(--blue);color:#fff;border:none;border-radius:7px;font-size:0.76rem;cursor:pointer;text-decoration:none;text-align:center;white-space:nowrap;}
+.doc-del{padding:5px;background:none;border:none;color:#ccc;cursor:pointer;font-size:0.8rem;}
+.cat-head{font-size:0.78rem;font-weight:700;color:var(--green);margin:14px 0 6px;padding-bottom:4px;border-bottom:1.5px solid var(--green-pale);}
+/* モーダル */
+.modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:999;align-items:center;justify-content:center;flex-direction:column;gap:12px;padding:10px;}
+.modal.open{display:flex;}
+.modal img{max-width:96vw;max-height:82vh;border-radius:8px;object-fit:contain;}
+.modal-close{color:#fff;background:rgba(255,255,255,0.15);border:none;border-radius:20px;padding:8px 24px;cursor:pointer;}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🗂️ 梶原果樹園 書類管理</h1>
+    <div class="sub">荒尾市 ― 紙書類を写真・PDFで保管</div>
+  </div>
+  <span id="sync-dot">接続中…</span>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('input',event)">➕ 登録</button>
+  <button class="tab-btn" onclick="showPage('list',event)">🗂️ 一覧</button>
+</div>
+
+<!-- 登録ページ -->
+<div id="page-input" class="page active">
+  <div id="gas-notice" class="notice" style="display:none;">
+    ⚠️ Googleドライブ連携が未設定です。写真は今すぐ登録できますが、<b>PDFの保存にはドライブ連携の設定</b>が必要です。
+  </div>
+
+  <div class="date-nav">
+    <input type="date" id="rec-date">
+    <button class="btn-today" onclick="setToday()">今日</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🏷️ 分類（1つ選択）</div>
+    <div class="btn-group" id="cat-btns"></div>
+    <div style="margin-top:8px;display:flex;gap:6px;">
+      <input type="text" id="new-cat" placeholder="分類を追加" style="font-size:0.85rem;">
+      <button class="btn-today" onclick="addCat()">＋追加</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📄 書類のタイトル</div>
+    <input type="text" id="title" placeholder="例：JA出荷契約書、農薬使用報告">
+  </div>
+
+  <div class="card">
+    <div class="card-title">📷 写真・PDFを選ぶ</div>
+    <div class="upload-area" onclick="document.getElementById('file-input').click()">
+      <div class="ic">📸</div>
+      <div class="lb">タップして写真を撮る／ファイルを選ぶ</div>
+      <div class="sb">写真・PDFに対応</div>
+    </div>
+    <input type="file" id="file-input" accept="image/*,application/pdf" style="display:none" onchange="onFileSelect(this)">
+    <div class="preview-box" id="preview"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📝 メモ（任意）</div>
+    <input type="text" id="note" placeholder="例：2026年度分、要提出、控え">
+  </div>
+
+  <button class="btn-save" id="save-btn" onclick="saveDoc()">💾 保存する</button>
+  <div class="save-msg" id="save-msg"></div>
+</div>
+
+<!-- 一覧ページ -->
+<div id="page-list" class="page">
+  <div class="filter-row">
+    <select id="list-cat" onchange="renderList()"><option value="">すべての分類</option></select>
+    <input type="text" id="list-q" placeholder="🔍 タイトル・メモ" oninput="renderList()">
+  </div>
+  <div id="list-content"></div>
+</div>
+
+<!-- 画像拡大モーダル -->
+<div class="modal" id="modal" onclick="closeModal()">
+  <img id="modal-img" src="" alt="">
+  <button class="modal-close" onclick="closeModal()">✕ 閉じる</button>
+</div>
+
+<script>
+// ====== 既定カテゴリ ======
+const DEFAULT_CATS=['JA・農協','行政・市役所','出荷・市場','補助金・申請','農薬・防除','肥料・資材','税務・経理','保険','契約','その他'];
+
+// ====== 状態 ======
+let docs = [];
+let cats = DEFAULT_CATS.slice();
+let selCat='';
+let pendingFile=null; // {dataUrl, name, mime, isPdf, thumb}
+
+function init(){
+  renderCatBtns();
+  setToday();
+  document.getElementById('gas-notice').style.display = GAS_URL ? 'none' : 'block';
+}
+
+function renderCatBtns(){
+  const c=document.getElementById('cat-btns');
+  c.innerHTML='';
+  cats.forEach(v=>{
+    const b=document.createElement('button');b.className='opt';b.textContent=v;
+    if(v===selCat)b.classList.add('selected');
+    b.onclick=()=>{document.querySelectorAll('#cat-btns .opt').forEach(x=>x.classList.remove('selected'));b.classList.add('selected');selCat=v;};
+    c.appendChild(b);
+  });
+  const s=document.getElementById('list-cat'); if(s){const cur=s.value;s.innerHTML='<option value="">すべての分類</option>'+cats.map(c=>`<option value="${c}">${c}</option>`).join('');s.value=cur;}
+}
+
+function addCat(){
+  const el=document.getElementById('new-cat');const n=el.value.trim();
+  if(!n)return; if(cats.includes(n)){alert('もうあります');return;}
+  cats.push(n);el.value='';renderCatBtns();scheduleSync();
+}
+
+function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='list')renderList();
+}
+
+// ====== ファイル選択・プレビュー ======
+function onFileSelect(input){
+  const f=input.files[0]; if(!f)return;
+  const isPdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const dataUrl=e.target.result;
+    if(isPdf){
+      pendingFile={dataUrl,name:f.name,mime:f.type||'application/pdf',isPdf:true,thumb:''};
+      document.getElementById('preview').innerHTML=`<div class="preview-pdf">📄 ${f.name}</div>`;
+      if(!document.getElementById('title').value) document.getElementById('title').value=f.name.replace(/\.pdf$/i,'');
+    }else{
+      // 画像：表示用と保存用に縮小
+      const full=await resizeImage(dataUrl,1600,0.82);
+      const thumb=await resizeImage(dataUrl,400,0.7);
+      pendingFile={dataUrl:full,name:f.name||'photo.jpg',mime:'image/jpeg',isPdf:false,thumb};
+      document.getElementById('preview').innerHTML=`<img src="${thumb}" alt="preview">`;
+    }
+  };
+  reader.readAsDataURL(f);
+  input.value='';
+}
+
+function resizeImage(dataUrl,maxSize,quality){
+  return new Promise(res=>{
+    const img=new Image();
+    img.onload=()=>{
+      let{width:w,height:h}=img;
+      if(w>h){ if(w>maxSize){h=Math.round(h*maxSize/w);w=maxSize;} }
+      else{ if(h>maxSize){w=Math.round(w*maxSize/h);h=maxSize;} }
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      res(cv.toDataURL('image/jpeg',quality));
+    };
+    img.onerror=()=>res(dataUrl);
+    img.src=dataUrl;
+  });
+}
+
+// ====== Googleドライブへアップロード ======
+// CORSで応答が読めないため、no-corsで送信 → GASがFirebaseにリンクをPUT → それを受信
+async function uploadToDrive(file, docId){
+  fetch(GAS_URL,{
+    method:'POST', mode:'no-cors',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'uploadDoc',docId:docId,name:file.name,mime:file.mime,data:file.dataUrl})
+  }).catch(e=>console.error(e));
+  return await waitForDriveUrl(docId, 90000);
+}
+function waitForDriveUrl(docId, timeoutMs){
+  return new Promise((resolve,reject)=>{
+    const ref=firebase.database().ref('kajiwara_docs_files/'+docId);
+    const to=setTimeout(()=>{ try{ref.off();}catch(e){} reject(new Error('タイムアウト（ドライブ連携を確認してください）')); }, timeoutMs);
+    ref.on('value',snap=>{
+      const v=snap.val();
+      if(v){ clearTimeout(to); try{ref.off();}catch(e){} resolve(v); }
+    });
+  });
+}
+
+// ====== 保存 ======
+async function saveDoc(){
+  const date=document.getElementById('rec-date').value;
+  const title=document.getElementById('title').value.trim();
+  if(!date){alert('日付を選んでください');return;}
+  if(!selCat){alert('分類を選んでください');return;}
+  if(!title){alert('タイトルを入力してください');return;}
+  if(!pendingFile){alert('写真かPDFを選んでください');return;}
+
+  const btn=document.getElementById('save-btn');const msg=document.getElementById('save-msg');
+  btn.disabled=true;
+
+  const id=Date.now()+Math.floor(Math.random()*100000);
+  let driveUrl='', inlineImg='';
+  try{
+    if(GAS_URL){
+      msg.textContent='📤 Googleドライブに保存中...（PDFは時間がかかります）';
+      driveUrl=await uploadToDrive(pendingFile, id);
+    }else{
+      // 未設定：画像なら端末間同期用に縮小版をFirebaseへ。PDFは不可。
+      if(pendingFile.isPdf){ alert('PDFの保存にはGoogleドライブ連携の設定が必要です'); btn.disabled=false; msg.textContent=''; return; }
+      inlineImg=await resizeImage(pendingFile.dataUrl,1000,0.7);
+    }
+  }catch(err){
+    msg.textContent='⚠️ 保存失敗：'+err.message; btn.disabled=false; return;
+  }
+
+  const doc={ id, date, category:selCat, title,
+    type:pendingFile.isPdf?'pdf':'image', name:pendingFile.name,
+    driveUrl, inlineImg, thumb:pendingFile.thumb||'',
+    note:document.getElementById('note').value.trim() };
+  docs.push(doc);
+  scheduleSync();
+
+  msg.textContent='✅ 保存しました！';
+  setTimeout(()=>msg.textContent='',2500);
+  // リセット
+  document.getElementById('title').value='';
+  document.getElementById('note').value='';
+  document.getElementById('preview').innerHTML='';
+  pendingFile=null;
+  btn.disabled=false;
+}
+
+function delDoc(id){
+  if(!confirm('この書類を一覧から削除しますか？\n（Googleドライブ上のファイルは残ります）'))return;
+  docs=docs.filter(d=>d.id!==id);
+  scheduleSync();renderList();
+}
+
+// ====== 一覧 ======
+function renderList(){
+  const el=document.getElementById('list-content');
+  const fc=document.getElementById('list-cat').value;
+  const q=(document.getElementById('list-q').value||'').toLowerCase();
+  let rows=docs.filter(d=>{
+    if(fc&&d.category!==fc)return false;
+    if(q&&!(d.title||'').toLowerCase().includes(q)&&!(d.note||'').toLowerCase().includes(q))return false;
+    return true;
+  });
+  if(!rows.length){el.innerHTML='<div class="empty">📭 該当する書類がありません<br><small>「➕ 登録」から追加してください</small></div>';return;}
+  rows.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
+  // 分類ごとにグループ
+  const groups={};
+  rows.forEach(d=>{(groups[d.category]=groups[d.category]||[]).push(d);});
+  let html='';
+  Object.keys(groups).forEach(cat=>{
+    html+=`<div class="cat-head">🏷️ ${cat}（${groups[cat].length}）</div>`;
+    html+=groups[cat].map(d=>{
+      const[y,m,dd]=d.date.split('-');
+      const img=d.thumb||d.inlineImg||'';
+      const thumbHtml=d.type==='pdf'
+        ? `<div class="doc-icon">📄</div>`
+        : (img?`<img class="doc-thumb" src="${img}" onclick="openImg('${d.id}')">`:`<div class="doc-icon">🖼️</div>`);
+      const openHtml=d.driveUrl
+        ? `<a class="doc-open" href="${d.driveUrl}" target="_blank" rel="noopener">開く</a>`
+        : (d.type==='image'?`<button class="doc-open" onclick="openImg('${d.id}')">開く</button>`:'');
+      return `<div class="doc-item">
+        ${thumbHtml}
+        <div class="doc-body">
+          <div class="doc-title">${escapeHtml(d.title)}</div>
+          <div class="doc-meta">${y}/${+m}/${+dd}　${d.type==='pdf'?'PDF':'写真'}</div>
+          ${d.note?`<div class="doc-meta">📝${escapeHtml(d.note)}</div>`:''}
+        </div>
+        <div class="doc-actions">
+          ${openHtml}
+          <button class="doc-del" onclick="delDoc(${d.id})">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
+  });
+  el.innerHTML=html;
+}
+
+function openImg(id){
+  const d=docs.find(x=>x.id==id);if(!d)return;
+  const src=d.inlineImg||d.thumb;
+  if(d.driveUrl&&!src){ window.open(d.driveUrl,'_blank'); return; }
+  if(!src)return;
+  document.getElementById('modal-img').src=src;
+  document.getElementById('modal').classList.add('open');
+}
+function closeModal(){document.getElementById('modal').classList.remove('open');document.getElementById('modal-img').src='';}
+
+function escapeHtml(s){return(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+
+// ====== Firebase 同期 ======
+const SYNC={id:Math.random().toString(36).slice(2),applying:false,ready:false};
+let dataRef=null,lastJSON=null,syncTimer=null;
+function snapshotJSON(){return JSON.stringify({docs,cats});}
+function setSyncDot(t,c){const el=document.getElementById('sync-dot');if(el){el.textContent=t;el.style.background=c;}}
+function scheduleSync(){if(syncTimer)clearTimeout(syncTimer);syncTimer=setTimeout(pushIfChanged,800);}
+function pushIfChanged(){
+  if(!SYNC.ready||SYNC.applying||!dataRef)return;
+  const cur=snapshotJSON();if(cur===lastJSON)return;lastJSON=cur;
+  setSyncDot('保存中…','#e09020');
+  dataRef.set({docs,cats,writer:SYNC.id,updatedAt:Date.now()})
+    .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
+    .catch(e=>{setSyncDot('保存失敗','#c0392b');console.error(e);lastJSON=null;});
+}
+function applyRemote(d){
+  SYNC.applying=true;
+  docs=d.docs||[];
+  cats=(d.cats&&d.cats.length)?d.cats:DEFAULT_CATS.slice();
+  renderCatBtns();
+  const active=document.querySelector('.page.active');
+  if(active&&active.id==='page-list')renderList();
+  lastJSON=snapshotJSON();
+  SYNC.applying=false;
+}
+function initFirebase(){
+  if(typeof firebase==='undefined'){setSyncDot('SDK失敗','#c0392b');return;}
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dataRef=firebase.database().ref(FIREBASE_PATH);
+    firebase.database().ref('.info/connected').on('value',s=>{
+      if(s.val()===true){if(SYNC.ready)setSyncDot('同期済 ✓','#3a8a2a');}
+      else setSyncDot('オフライン','#888');
+    });
+    dataRef.on('value',snap=>{
+      const d=snap.val();
+      if(!d){SYNC.ready=true;lastJSON=null;pushIfChanged();return;}
+      SYNC.ready=true;
+      if(d.writer===SYNC.id){setSyncDot('同期済 ✓','#3a8a2a');return;}
+      try{applyRemote(d);}catch(e){console.error(e);}
+      setSyncDot('同期済 ✓','#3a8a2a');
+    },err=>{setSyncDot('接続失敗','#c0392b');console.error(err);});
+  }catch(e){setSyncDot('初期化失敗','#c0392b');console.error(e);}
+}
+setInterval(pushIfChanged,2000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')pushIfChanged();});
+window.addEventListener('pagehide',pushIfChanged);
+
+init();
+initFirebase();
+</script>
+</body>
+</html>
