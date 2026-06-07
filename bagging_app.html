@@ -234,15 +234,10 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
   <div class="card">
     <div class="card-title">📊 集計</div>
     <div class="grand-total"><span>総累計（全期間）</span><span class="gt-v" id="grand-total">0枚</span></div>
-    <div style="display:flex;gap:8px;margin-bottom:10px;">
-      <input type="number" id="sum-year" inputmode="numeric" oninput="renderSummary()" style="width:96px;">
-      <select id="sum-group" onchange="renderSummary()" style="flex:1;">
-        <option value="variety">品種ごと</option>
-        <option value="bagType">袋種ごと</option>
-        <option value="field">園地ごと</option>
-        <option value="block">区画ごと</option>
-        <option value="date">日付ごと</option>
-      </select>
+    <div style="display:flex;gap:8px;margin-bottom:10px;align-items:center;">
+      <label style="font-size:0.8rem;color:var(--text-light);white-space:nowrap;">対象年</label>
+      <input type="number" id="sum-year" inputmode="numeric" oninput="renderSummary()" style="width:110px;">
+      <span style="font-size:0.72rem;color:var(--text-light);">編集は「📋履歴」の表で</span>
     </div>
     <div id="summary-content"></div>
   </div>
@@ -626,28 +621,29 @@ function delRec(id){
 
 function renderSummary(){
   const yr=parseInt(document.getElementById('sum-year').value)||new Date().getFullYear();
-  const group=document.getElementById('sum-group').value||'variety';
   const el=document.getElementById('summary-content');
   // 総累計（全期間・全記録）
   const grand=records.reduce((s,r)=>s+(r.count||0),0);
   const gt=document.getElementById('grand-total'); if(gt) gt.textContent=grand.toLocaleString()+'枚';
   const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
   if(!filtered.length){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
-  const labelMap={variety:'品種',bagType:'袋種',field:'園地',block:'区画',date:'日付'};
-  const map={}; let total=0;
-  filtered.forEach(r=>{
-    let key=r[group];
-    if(!key||key==='') key='(未設定)';
-    map[key]=(map[key]||0)+(r.count||0);
-    total+=(r.count||0);
-  });
-  let arr=Object.entries(map);
-  if(group==='date'){ arr.sort((a,b)=>b[0].localeCompare(a[0])); }   // 日付は新しい順
-  else { arr.sort((a,b)=>b[1]-a[1]); }                              // それ以外は多い順
-  const fmtKey=(k)=>{ if(group==='date' && /^\d{4}-\d{2}-\d{2}$/.test(k)){ const[,m,d]=k.split('-'); return `${+m}/${+d}`; } return k; };
-  el.innerHTML=`<div class="note" style="margin-bottom:8px;">${yr}年・${labelMap[group]}ごとの袋かけ枚数</div>`+
-    arr.map(([k,v])=>`<div class="summary-row"><span>${fmtKey(k)}</span><span class="v">${v.toLocaleString()}枚</span></div>`).join('')+
-    `<div class="summary-row" style="border-top:2px solid var(--green);margin-top:4px"><span style="font-weight:700">${yr}年 合計</span><span class="v" style="font-size:1.1rem">${total.toLocaleString()}枚</span></div>`;
+  const yearTotal=filtered.reduce((s,r)=>s+(r.count||0),0);
+  function section(title,field,byDate){
+    const map={};
+    filtered.forEach(r=>{ let k=r[field]; if(!k||k==='') k='(未設定)'; map[k]=(map[k]||0)+(r.count||0); });
+    let arr=Object.entries(map);
+    if(byDate) arr.sort((a,b)=>b[0].localeCompare(a[0])); else arr.sort((a,b)=>b[1]-a[1]);
+    const fmtK=(k)=>{ if(byDate && /^\d{4}-\d{2}-\d{2}$/.test(k)){ const[,m,d]=k.split('-'); return `${+m}/${+d}`; } return k; };
+    return `<div style="font-weight:700;color:var(--green);margin:16px 0 4px;border-bottom:1.5px solid var(--green-pale);padding-bottom:4px;">${title}</div>`+
+      arr.map(([k,v])=>`<div class="summary-row"><span>${fmtK(k)}</span><span class="v">${v.toLocaleString()}枚</span></div>`).join('');
+  }
+  el.innerHTML=
+    `<div class="summary-row" style="background:#f6faf2;border-radius:8px;padding:9px 11px;margin-bottom:4px;"><span style="font-weight:700">${yr}年 合計</span><span class="v" style="font-size:1.15rem">${yearTotal.toLocaleString()}枚</span></div>`+
+    section('📅 日付ごと枚数','date',true)+
+    section('🍐 品種ごと合計','variety',false)+
+    section('🛍️ 袋種ごと合計','bagType',false)+
+    section('📍 園地ごと合計','field',false)+
+    section('🗺️ 区画ごと合計','block',false);
 }
 
 init();
