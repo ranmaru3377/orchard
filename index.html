@@ -845,6 +845,7 @@ select:focus, input:focus, textarea:focus { outline: none; border-color: #3a8a2a
 .sbtn.todo.on { background: #e8f5e2; border-color: #4a9a2a; color: #2a6a0a; }
 .sbtn.wip.on  { background: #fff3e0; border-color: #e0900a; color: #9a5a00; }
 .sbtn.done.on { background: #e3f2fd; border-color: #1a7ab0; color: #0a4a7a; }
+.sbtn.on { background: #eaf4e4; border-color: #3a8a2a; color: #2a6a0a; }
 
 .titem {
   display: flex; align-items: center; gap: 8px;
@@ -978,6 +979,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
     <div class="tbtn on" id="btn-select" title="選択" onclick="setTool('select')">↖</div>
     <div class="tbtn" id="btn-add" title="木を追加" onclick="setTool('add')">🌳</div>
     <div class="tbtn" id="btn-move" title="木を移動" onclick="setTool('move')" style="font-size:18px">✋</div>
+    <div class="tbtn" id="btn-issue" title="病害虫マーク" onclick="setTool('issue')" style="font-size:17px">🐛</div>
     <div class="tbtn" title="全体表示" onclick="fitAll()">⊡</div>
     <div class="tbtn" id="btn-gps" title="現在地" onclick="toggleGps()" style="font-size:18px">📍</div>
     <div class="tbtn" id="btn-compass" title="方位（向き）" onclick="toggleHeading()" style="font-size:18px">🧭</div>
@@ -1034,6 +1036,48 @@ const FIREBASE_PATH = "kajiwara_orchard";
   </div>
 
   <div id="statusbar">タップで木を選択 ／ 🌳で木を追加</div>
+
+  <!-- 病害虫 編集モーダル -->
+  <div id="issue-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:1100;align-items:flex-end;justify-content:center;">
+    <div style="background:#fff;width:100%;max-width:500px;border-radius:16px 16px 0 0;padding:16px;max-height:88vh;overflow-y:auto;padding-bottom:max(16px,env(safe-area-inset-bottom));">
+      <div style="display:flex;align-items:center;margin-bottom:12px;">
+        <div id="im-title" style="font-size:16px;font-weight:700;color:#2d5016;flex:1;">🐛 病害虫の記録</div>
+        <div onclick="closeIssueModal()" style="font-size:20px;color:#999;cursor:pointer;padding:2px 8px;">✕</div>
+      </div>
+      <div class="frow"><div class="flabel">種類</div>
+        <div class="sbrow" id="im-kind">
+          <div class="sbtn" id="im-kind-pest" onclick="setIssueKind('pest')">🐛 虫害</div>
+          <div class="sbtn" id="im-kind-disease" onclick="setIssueKind('disease')">🦠 病害</div>
+        </div>
+      </div>
+      <div class="frow"><div class="flabel">名称</div>
+        <input type="text" id="im-name" list="im-name-list" placeholder="例：ハダニ、黒星病">
+        <datalist id="im-name-list"></datalist>
+        <div id="im-name-chips" style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px;"></div>
+      </div>
+      <div class="row2">
+        <div><label>発生日</label><input type="date" id="im-date"></div>
+        <div><label>程度</label>
+          <div class="sbrow">
+            <div class="sbtn" id="im-sev-1" onclick="setIssueSev('軽')">軽</div>
+            <div class="sbtn" id="im-sev-2" onclick="setIssueSev('中')">中</div>
+            <div class="sbtn" id="im-sev-3" onclick="setIssueSev('甚')">甚</div>
+          </div>
+        </div>
+      </div>
+      <div class="frow"><div class="flabel">状況</div>
+        <div class="sbrow">
+          <div class="sbtn" id="im-st-active" onclick="setIssueStatus('active')">⚠️ 発生中</div>
+          <div class="sbtn" id="im-st-done" onclick="setIssueStatus('done')">✅ 対処済</div>
+        </div>
+      </div>
+      <div class="frow"><div class="flabel">メモ</div><textarea id="im-memo" placeholder="例：南側の新高に多い、〇〇を散布"></textarea></div>
+      <div style="display:flex;gap:8px;margin-top:6px;">
+        <button class="gbtn red" onclick="delIssue()" style="margin:0;flex:1;">🗑 削除</button>
+        <button class="gbtn" onclick="saveIssueModal()" style="margin:0;flex:2;">保存</button>
+      </div>
+    </div>
+  </div>
 
   <!-- パネル開閉ボタン -->
   <button id="panel-toggle" onclick="togglePanel()">📋</button>
@@ -1273,11 +1317,19 @@ let drawPoly = null;
 let editZid = null;
 let selZColor = ZCOLS[0];
 let panelOpen = false;
+// 病害虫
+let issues = [];
+let issueMap = {};
+let curIssueId = null;
+const ISSUE_TYPES = {
+  disease: { label:'病害', icon:'🦠', color:'#8e44ad', names:['黒星病','赤星病','輪紋病','うどんこ病','胴枯病','炭そ病','すす病','その他病害'] },
+  pest:    { label:'虫害', icon:'🐛', color:'#c0392b', names:['ハダニ','アブラムシ','カイガラムシ','シンクイムシ','カメムシ','ハマキムシ','コスカシバ','その他虫害'] }
+};
 
 // Undo
 let undoStack = [];
 function pushUndo() {
-  undoStack.push(JSON.stringify({ trees, zones, orchards, nid }));
+  undoStack.push(JSON.stringify({ trees, zones, orchards, nid, issues }));
   if (undoStack.length > 20) undoStack.shift();
   const b = document.getElementById('btn-undo');
   b.style.opacity = '1'; b.style.pointerEvents = 'auto';
@@ -1290,8 +1342,9 @@ function undo() {
   Object.values(zpolyLayers).forEach(l => { try { map.removeLayer(l); } catch(e){} });
   zpolyLayers = {};
   trees = snap.trees; zones = snap.zones; orchards = snap.orchards; nid = snap.nid;
+  issues = snap.issues || [];
   trees.forEach(t => addMarker(t));
-  drawAllZones(); deselect();
+  drawAllZones(); drawAllIssues(); deselect();
   renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
   if (!undoStack.length) {
@@ -1366,6 +1419,9 @@ map.on('click', function(e) {
     updateStats(); renderList(); renderLegend();
     document.getElementById('statusbar').textContent = '🌳 #'+t.id+' を配置しました（続けてタップで連続配置）';
   }
+  if (tool === 'issue') {
+    placeIssue(e.latlng.lat, e.latlng.lng);
+  }
 });
 map.on('dblclick', function(e) {
   if (drawZid !== null) { L.DomEvent.stop(e); confirmDraw(); }
@@ -1376,14 +1432,15 @@ map.on('dblclick', function(e) {
 // ==============================
 function setTool(t) {
   tool = t;
-  ['select','add','move'].forEach(x => { const b=document.getElementById('btn-'+x); if(b) b.classList.toggle('on', x===t); });
+  ['select','add','move','issue'].forEach(x => { const b=document.getElementById('btn-'+x); if(b) b.classList.toggle('on', x===t); });
   // 移動モードのときだけ全ての木をドラッグ可能にする
   Object.values(markerMap).forEach(m => { try { (t==='move') ? m.dragging.enable() : m.dragging.disable(); } catch(e){} });
-  map.getContainer().style.cursor = t==='add' ? 'crosshair' : '';
+  map.getContainer().style.cursor = (t==='add'||t==='issue') ? 'crosshair' : '';
   document.getElementById('statusbar').textContent =
-    t==='add'  ? '地図をタップして木を配置 / ↖で選択に戻す' :
-    t==='move' ? '✋ 移動モード：木をドラッグして移動 / ↖で終了' :
-                 'タップで木を選択 ／ 🌳で木を追加';
+    t==='add'   ? '地図をタップして木を配置 / ↖で選択に戻す' :
+    t==='move'  ? '✋ 移動モード：木をドラッグして移動 / ↖で終了' :
+    t==='issue' ? '🐛 地図をタップして病害虫の発生地点をマーク / ↖で終了' :
+                  'タップで木を選択 ／ 🌳で木を追加';
 }
 
 // ==============================
@@ -1399,7 +1456,7 @@ function renderOrchardBar() {
 }
 function switchOrchard(id) {
   curOid = id;
-  renderOrchardBar(); renderZoneSelect(); renderZones(); renderLegend();
+  renderOrchardBar(); renderZoneSelect(); renderZones(); renderLegend(); drawAllIssues();
   const o = orchards.find(o=>o.id===id);
   const pts = [...(o?.polygon||[]).map(p=>[p.lat,p.lng]), ...trees.filter(t=>t.oid===id).map(t=>[t.lat,t.lng])];
   if (pts.length) map.fitBounds(L.latLngBounds(pts), {padding:[30,30]});
@@ -2443,7 +2500,7 @@ function addTreeAtGps() {
 // 保存 / 読込（iOS対応）
 // ==============================
 function saveData() {
-  const data = {orchards,zones,trees,nid};
+  const data = {orchards,zones,trees,nid,issues};
   const json = JSON.stringify(data, null, 2);
   const fname = `kajiwara_${new Date().toISOString().slice(0,10)}.json`;
   try {
@@ -2480,10 +2537,11 @@ function loadData(e) {
       if(d.orchards)orchards=d.orchards;
       if(d.zones)zones=d.zones;
       if(d.trees)trees=d.trees;
+      issues=d.issues||[];
       nid=d.nid||(Math.max(0,...trees.map(t=>t.id))+1);
       trees.forEach(t=>addMarker(t));
       orchards.forEach(o=>{ if(o.polygon?.length>=3){ opolyLayers[o.id]=L.polygon(o.polygon.map(p=>[p.lat,p.lng]),{color:o.color,weight:2.5,fillOpacity:0.06}).addTo(map); } });
-      drawAllZones();
+      drawAllZones(); drawAllIssues();
       renderOrchardBar(); renderZoneSelect(); renderZones();
       fitAll(); updateStats(); renderList(); renderLegend();
       markDirty();alert('✅ 読み込み完了: '+trees.length+'本');
@@ -2538,7 +2596,102 @@ const SYNC = { id: Math.random().toString(36).slice(2), applying:false, ready:fa
 let dataRef = null;
 let lastJSON = null;
 function markDirty(){ /* 互換用ダミー（実際は2秒ごとの自動検知で同期） */ }
-function snapshotObj(){ return { orchards, zones, trees, nid }; }
+// ==============================
+// 病害虫マーカー
+// ==============================
+let issueDraft=null;
+function makeIssueIcon(iss){
+  const t=ISSUE_TYPES[iss.kind]||ISSUE_TYPES.pest;
+  const done=iss.status==='done';
+  const bg=done?'#9aa0a6':t.color;
+  const sevRing = iss.severity==='甚' ? '0 0 0 3px rgba(192,57,43,0.55),' : iss.severity==='中' ? '0 0 0 2px rgba(230,126,34,0.55),' : '';
+  const sel = iss.id===curIssueId ? 'outline:3px solid #2a7ab0;outline-offset:2px;' : '';
+  return L.divIcon({className:'',html:`<div style="position:relative;width:26px;height:26px;">
+    <div style="width:26px;height:26px;border-radius:50% 50% 50% 50%;background:${bg};border:2px solid #fff;box-shadow:${sevRing}0 2px 5px rgba(0,0,0,0.4);${sel}"></div>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:14px;">${done?'✅':t.icon}</div>
+  </div>`,iconSize:[26,26],iconAnchor:[13,13]});
+}
+function drawAllIssues(){
+  Object.values(issueMap).forEach(m=>{try{map.removeLayer(m);}catch(e){}}); issueMap={};
+  issues.filter(i=>i.oid===curOid).forEach(i=>addIssueMarker(i));
+}
+function addIssueMarker(iss){
+  const m=L.marker([iss.lat,iss.lng],{icon:makeIssueIcon(iss),zIndexOffset:200});
+  m.on('click', ()=>{ setTool('select'); openIssueModal(iss.id); });
+  m.addTo(map); issueMap[iss.id]=m;
+}
+function refreshIssueMarker(id){ const i=issues.find(x=>x.id===id),m=issueMap[id]; if(i&&m)m.setIcon(makeIssueIcon(i)); }
+function removeIssueMarker(id){ if(issueMap[id]){try{map.removeLayer(issueMap[id]);}catch(e){} delete issueMap[id];} }
+
+function placeIssue(lat,lng){
+  pushUndo();
+  const iss={ id:'i'+Date.now()+Math.floor(Math.random()*1000), oid:curOid, lat, lng,
+    kind:'pest', name:'', date:new Date().toISOString().slice(0,10), severity:'中', status:'active', memo:'' };
+  issues.push(iss); addIssueMarker(iss);
+  openIssueModal(iss.id);
+}
+
+function openIssueModal(id){
+  const i=issues.find(x=>x.id===id); if(!i)return;
+  const prev=curIssueId; curIssueId=id;
+  if(prev&&prev!==id) refreshIssueMarker(prev);
+  refreshIssueMarker(id);
+  issueDraft={ kind:i.kind, severity:i.severity, status:i.status };
+  document.getElementById('im-name').value=i.name||'';
+  document.getElementById('im-date').value=i.date||new Date().toISOString().slice(0,10);
+  document.getElementById('im-memo').value=i.memo||'';
+  applyIssueKindUI(); applyIssueSevUI(); applyIssueStatusUI(); renderIssueNameSuggest();
+  document.getElementById('issue-modal').style.display='flex';
+}
+function setIssueKind(k){ issueDraft.kind=k; applyIssueKindUI(); renderIssueNameSuggest(); }
+function setIssueSev(s){ issueDraft.severity=s; applyIssueSevUI(); }
+function setIssueStatus(s){ issueDraft.status=s; applyIssueStatusUI(); }
+function applyIssueKindUI(){
+  document.getElementById('im-kind-pest').classList.toggle('on', issueDraft.kind==='pest');
+  document.getElementById('im-kind-disease').classList.toggle('on', issueDraft.kind==='disease');
+}
+function applyIssueSevUI(){
+  document.getElementById('im-sev-1').classList.toggle('on', issueDraft.severity==='軽');
+  document.getElementById('im-sev-2').classList.toggle('on', issueDraft.severity==='中');
+  document.getElementById('im-sev-3').classList.toggle('on', issueDraft.severity==='甚');
+}
+function applyIssueStatusUI(){
+  document.getElementById('im-st-active').classList.toggle('on', issueDraft.status==='active');
+  document.getElementById('im-st-done').classList.toggle('on', issueDraft.status==='done');
+}
+function renderIssueNameSuggest(){
+  const t=ISSUE_TYPES[issueDraft.kind];
+  document.getElementById('im-name-list').innerHTML=t.names.map(n=>`<option value="${n}">`).join('');
+  document.getElementById('im-name-chips').innerHTML=t.names.map(n=>
+    `<span onclick="document.getElementById('im-name').value='${n}'" style="padding:5px 10px;border:1px solid ${t.color};color:${t.color};border-radius:14px;font-size:12px;cursor:pointer;">${n}</span>`).join('');
+}
+function saveIssueModal(){
+  const i=issues.find(x=>x.id===curIssueId); if(!i){ closeIssueModal(); return; }
+  pushUndo();
+  i.kind=issueDraft.kind;
+  i.name=document.getElementById('im-name').value.trim();
+  i.date=document.getElementById('im-date').value;
+  i.severity=issueDraft.severity;
+  i.status=issueDraft.status;
+  i.memo=document.getElementById('im-memo').value.trim();
+  refreshIssueMarker(i.id);
+  closeIssueModal();
+}
+function delIssue(){
+  if(!curIssueId) return;
+  if(!confirm('この病害虫マークを削除しますか？')) return;
+  pushUndo();
+  removeIssueMarker(curIssueId);
+  issues=issues.filter(i=>i.id!==curIssueId);
+  closeIssueModal();
+}
+function closeIssueModal(){
+  document.getElementById('issue-modal').style.display='none';
+  const prev=curIssueId; curIssueId=null; issueDraft=null;
+  if(prev) refreshIssueMarker(prev);
+}
+
+function snapshotObj(){ return { orchards, zones, trees, nid, issues }; }
 function snapshotJSON(){ return JSON.stringify(snapshotObj()); }
 function setSyncStatus(text, color){ const el=document.getElementById('sync-dot'); if(el){ el.textContent=text; el.style.background=color; } }
 
@@ -2558,10 +2711,11 @@ function rebuildFromData(d){
   if(d.orchards) orchards=d.orchards;
   if(d.zones) zones=d.zones;
   trees = d.trees || [];
+  issues = d.issues || [];
   nid = d.nid || (Math.max(0,...trees.map(t=>t.id))+1);
   trees.forEach(t=>addMarker(t));
   orchards.forEach(o=>{ if(o.polygon&&o.polygon.length>=3){ opolyLayers[o.id]=L.polygon(o.polygon.map(p=>[p.lat,p.lng]),{color:o.color,weight:2.5,fillOpacity:0.06}).addTo(map); } });
-  drawAllZones(); renderOrchardBar(); renderZoneSelect(); renderZones();
+  drawAllZones(); drawAllIssues(); renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
   if(selId && trees.find(t=>t.id===selId)) selectTree(selId); else deselect();
 }
