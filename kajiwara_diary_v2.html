@@ -7,6 +7,20 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="梶原果樹園日誌">
 <title>梶原果樹園 作業日誌</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+// 労働時間管理アプリのデータを読み取り専用で参照（その日の労働時間を表示）
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+</script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;600;700&family=Noto+Sans+JP:wght@400;500&display=swap');
 
@@ -680,6 +694,13 @@
         <div style="font-size:0.68rem;color:#aaa;margin-top:3px;text-align:center;" id="total-man-hours"></div>
       </div>
     </div>
+    <div id="labor-info" style="display:none;margin-top:10px;background:#e4f1fb;border:1px solid #1a6fa3;border-radius:8px;padding:10px 12px;">
+      <div id="labor-info-text" style="font-size:0.82rem;color:#1a5a8a;"></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button type="button" onclick="applyLaborToDiary()" style="flex:1;padding:8px;border:1px solid #1a6fa3;background:#fff;color:#1a6fa3;border-radius:7px;font-size:0.78rem;font-weight:600;cursor:pointer;font-family:inherit;">この値を人数・時間に反映</button>
+        <a href="労働時間管理アプリ.html" style="flex:1;padding:8px;background:#1a6fa3;color:#fff;border-radius:7px;font-size:0.78rem;font-weight:600;text-align:center;text-decoration:none;">⏱️ 労働時間管理を開く</a>
+      </div>
+    </div>
   </div>
 
   <div class="card">
@@ -1001,7 +1022,45 @@ window.onload = function() {
   setToday();
   setDecadeToday();
   buildYearFilter();
+  initLaborLink();
 };
+
+// ===== 労働時間管理アプリとの連携（読み取り専用） =====
+let laborRecords = [];
+let laborApplyVal = null;
+function initLaborLink(){
+  if(typeof firebase==='undefined') return;
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    firebase.database().ref('kajiwara_labor/records').on('value', s=>{
+      laborRecords = s.val() || [];
+      const d=document.getElementById('rec-date');
+      if(d && d.value) updateLaborInfo(d.value);
+    });
+  }catch(e){ console.error(e); }
+}
+function updateLaborInfo(dateStr){
+  const box=document.getElementById('labor-info'); if(!box) return;
+  const recs=laborRecords.filter(r=>r && r.date===dateStr);
+  if(!recs.length){ box.style.display='none'; laborApplyVal=null; return; }
+  const byPerson={};
+  recs.forEach(r=>{ byPerson[r.person]=(byPerson[r.person]||0)+(parseFloat(r.hours)||0); });
+  const persons=Object.keys(byPerson);
+  const totalH=persons.reduce((s,p)=>s+byPerson[p],0);
+  const r1=h=>Math.round(h*10)/10;
+  const detail=persons.map(p=>`${p} ${r1(byPerson[p])}h`).join('、');
+  box.style.display='block';
+  document.getElementById('labor-info-text').innerHTML=
+    `⏱️ <b>この日の労働（労働時間管理より）</b>：${persons.length}人・延べ ${r1(totalH)}時間<br>`+
+    `<span style="font-size:0.74rem">${detail}</span>`;
+  laborApplyVal={ workers:persons.length, hours:r1(totalH) };
+}
+function applyLaborToDiary(){
+  if(!laborApplyVal) return;
+  const wc=document.getElementById('worker-count'); if(wc) wc.value=laborApplyVal.workers;
+  const wh=document.getElementById('work-hours');   if(wh) wh.value=laborApplyVal.hours;
+  if(typeof updateManHours==='function') updateManHours();
+}
 
 function setToday() {
   const d = new Date();
@@ -1069,6 +1128,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function loadRecordToForm(dateStr) {
   clearForm();
   loadPhotosForDate(dateStr); // 写真も読み込む
+  updateLaborInfo(dateStr);   // 労働時間管理から その日の労働を表示
   const rec = records[dateStr];
   if(!rec) return;
   // 天気
