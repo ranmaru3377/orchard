@@ -81,8 +81,19 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     <button class="btn" onclick="addItem()">＋ 資材を追加</button>
     <button class="btn" onclick="carryAll()" title="全資材の前年期末を今年期首へコピー">前年末→今年期首</button>
   </div>
+  <div class="bar">
+    <span style="font-size:0.78rem;color:var(--text-light);">単価：</span>
+    <button class="btn" onclick="carryPrice()">前年単価→今年</button>
+    <button class="btn" onclick="raisePrices()">一律 ○% 値上げ</button>
+    <button class="btn" onclick="togglePricePaste()">📋 単価を貼付更新</button>
+  </div>
+  <div id="price-paste" style="display:none;background:#fff7e6;border:1px solid #f0c060;border-radius:10px;padding:11px;margin-bottom:10px;">
+    <div class="note" style="margin-bottom:6px;">注文書や見積を見ながら、<b>資材名　単価</b> の順で1行ずつ貼り付け／入力 →「今年の単価を更新」。<br>（タブ・カンマ・スペース区切りOK。名前が一致する資材の<span id="pp-year"></span>年単価を上書き）</div>
+    <textarea id="price-data" placeholder="例）10kg(L)\t120&#10;5㎏強化(L)\t105" style="width:100%;min-height:90px;font-size:0.8rem;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;"></textarea>
+    <button class="btn solid" style="width:100%;margin-top:8px;" onclick="importPrices()">今年の単価を更新</button>
+  </div>
   <div class="note" style="margin-bottom:8px;">
-    🟧前年（<span id="py-label"></span>） / 🟦今年（<span id="ty-label"></span>）。<b>使用量＝期首＋発注−期末</b>。<b>発注目安＝前年使用量−（今年期首＋今年発注済）</b>。セルは直接編集できます。
+    🟧前年（<span id="py-label"></span>） / 🟦今年（<span id="ty-label"></span>）。<b>使用量＝期首＋発注−期末</b>。<b>発注目安＝前年使用量−（今年期首＋発注済）</b>。<b>在庫金額＝現在庫×単価</b>。セルは直接編集できます。
   </div>
   <div class="scroll"><div id="table-wrap"></div></div>
 </div>
@@ -156,10 +167,12 @@ function render(){
     const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);
     return (ca<0?99:ca)-(cb<0?99:cb) || (a.name||'').localeCompare(b.name||'');
   });
+  let stockValTotal=0;
   let h='<table><tr>'
     +'<th>カテゴリ</th><th>資材名</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
     +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
+    +`<th class="ty">単価(円)</th><th class="ty">在庫金額</th>`
     +'<th class="sug">発注目安</th><th>発注予定</th><th></th></tr>';
   sorted.forEach(it=>{
     const pd=ydOf(it,py), td=ydOf(it,y);
@@ -167,6 +180,9 @@ function render(){
     const have=num(td.s)+num(td.o);
     const suggest=Math.max(0, pu-have);
     const plan=planOf(it,y);
+    const price=num(td.p);
+    const stockVal=num(td.e)*price;   // 在庫金額 = 現在庫 × 単価
+    stockValTotal+=stockVal;
     h+=`<tr>
       <td><select onchange="setField('${it.id}','cat',this.value)">${catOpts(it.cat)}</select></td>
       <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
@@ -179,11 +195,14 @@ function render(){
       <td><input type="number" class="cell" value="${td.o||0}" onchange="setYear('${it.id}',${y},'o',this.value)"></td>
       <td><input type="number" class="cell" value="${td.e||0}" onchange="setYear('${it.id}',${y},'e',this.value)"></td>
       <td class="calc">${fmt(tu)}</td>
+      <td><input type="number" class="cell" value="${td.p!=null&&td.p!==''?td.p:''}" placeholder="0" onchange="setYear('${it.id}',${y},'p',this.value)"></td>
+      <td class="calc">${stockVal?'¥'+Math.round(stockVal).toLocaleString():'-'}</td>
       <td class="sug">${fmt(suggest)}</td>
       <td><input type="number" class="cell" value="${plan!=null?plan:''}" placeholder="${fmt(suggest)}" onchange="setPlan('${it.id}',${y},this.value)"></td>
       <td><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
     </tr>`;
   });
+  h+=`<tr class="sumrow"><td colspan="12" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="2"></td></tr>`;
   h+='</table>';
   wrap.innerHTML=h;
 }
@@ -202,6 +221,46 @@ function carryAll(){
   if(!confirm(py+'年の期末在庫を、'+y+'年の期首在庫へ全資材コピーしますか？'))return;
   materials.forEach(it=>{ const pd=ydOf(it,py), td=ydOf(it,y); td.s=num(pd.e); });
   persist(); render();
+}
+
+// ===== 単価の一括操作 =====
+function carryPrice(){
+  const y=curYear(), py=y-1;
+  if(!confirm(py+'年の単価を、'+y+'年の単価へ全資材コピーしますか？\n（その後、値上げ分を編集できます）'))return;
+  materials.forEach(it=>{ const pd=ydOf(it,py), td=ydOf(it,y); if(num(pd.p)>0) td.p=num(pd.p); });
+  persist(); render();
+}
+function raisePrices(){
+  const y=curYear();
+  const pct=prompt(y+'年の単価を一律何％値上げしますか？（例：5）\n※前年単価が未入力の資材は、まず「前年単価→今年」でコピーしてください');
+  if(pct===null)return;
+  const r=parseFloat(pct); if(isNaN(r)){alert('数値を入れてください');return;}
+  materials.forEach(it=>{ const td=ydOf(it,y); if(num(td.p)>0){ td.p=Math.round(num(td.p)*(1+r/100)); } });
+  persist(); render();
+}
+function togglePricePaste(){
+  const b=document.getElementById('price-paste');
+  document.getElementById('pp-year').textContent=curYear();
+  b.style.display=(b.style.display==='none'||!b.style.display)?'block':'none';
+}
+function importPrices(){
+  const y=curYear();
+  const txt=(document.getElementById('price-data').value||'').trim();
+  if(!txt){alert('貼り付けデータがありません');return;}
+  const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+  let updated=0, notfound=[];
+  lines.forEach(line=>{
+    const parts=line.split(/\t|,|\s{2,}|\s/).filter(x=>x.trim()!=='');
+    if(parts.length<2)return;
+    const price=parseFloat(parts[parts.length-1].replace(/[^\d.]/g,''));
+    const name=parts.slice(0,parts.length-1).join(' ').trim();
+    if(isNaN(price))return;
+    const it=materials.find(m=>(m.name||'').trim()===name);
+    if(it){ ydOf(it,y).p=price; updated++; } else { notfound.push(name); }
+  });
+  persist(); render();
+  document.getElementById('price-data').value='';
+  alert('✅ '+updated+'件の単価を更新しました'+(notfound.length?`\n（名前が一致せず未更新：${notfound.join('、')}）`:''));
 }
 
 // ===== 発注リスト =====
