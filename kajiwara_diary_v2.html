@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -626,6 +630,11 @@ const FIREBASE_CONFIG = {
         <input type="number" id="wind-speed" placeholder="例：5.2" step="0.1">
       </div>
     </div>
+    <button type="button" onclick="fetchJmaForDate(document.getElementById('rec-date').value,false)"
+      style="width:100%;margin-top:12px;padding:11px;background:#1a6fa3;color:#fff;border:none;border-radius:8px;font-size:0.9rem;font-weight:700;font-family:inherit;cursor:pointer;">
+      🌤️ 気象庁（岱明）からこの日の気温等を取得
+    </button>
+    <div id="jma-status" style="font-size:0.78rem;margin-top:8px;color:#1a6fa3;font-weight:500;min-height:1.1em;"></div>
   </div>
 
   <div class="card">
@@ -1062,6 +1071,17 @@ function applyLaborToDiary(){
   if(typeof updateManHours==='function') updateManHours();
 }
 
+// その日に実際の記入があれば、クラウドに「記入済」の印をつける（20時通知の判定用）
+function markDiaryDone(dateStr){
+  try{
+    const r=records[dateStr]||{};
+    const hasContent = (r.works&&r.works.length) || (r.memo&&r.memo.trim()) || (r.weather&&r.weather.length) || (r.workNote&&r.workNote.trim());
+    if(hasContent && typeof firebase!=='undefined' && firebase.apps && firebase.apps.length){
+      firebase.database().ref('kajiwara_diary_done/'+dateStr).set(Date.now());
+    }
+  }catch(e){}
+}
+
 function setToday() {
   const d = new Date();
   document.getElementById('rec-date').value = toDateStr(d);
@@ -1129,6 +1149,14 @@ function loadRecordToForm(dateStr) {
   clearForm();
   loadPhotosForDate(dateStr); // 写真も読み込む
   updateLaborInfo(dateStr);   // 労働時間管理から その日の労働を表示
+  // 過去日で気象データ未取得なら、気象庁から自動取得
+  try{
+    const today=toDateStr(new Date());
+    if(dateStr && dateStr < today){
+      const r0=records[dateStr];
+      if(!r0 || !r0.tempMax){ fetchJmaForDate(dateStr, true); }
+    }
+  }catch(e){}
   const rec = records[dateStr];
   if(!rec) return;
   // 天気
@@ -1218,6 +1246,7 @@ function saveRecord() {
   const existing2 = records[dateStr] || {};
   records[dateStr] = { ...existing2, weather, weatherNote, tempMax, tempMin, precip, windSpeed, varieties, works, workNote, memo, workerCount, workHours };
   saveAll();
+  markDiaryDone(dateStr);                    // クラウドに「記入済」の印（20時通知の判定用）
   syncToSheet(dateStr, records[dateStr]); // Googleシートにも送信
 
   const msg = document.getElementById('save-msg');
@@ -1344,6 +1373,50 @@ function jumpToRecord(dateStr) {
 
 
 // ========== 気象庁CSV取り込み ==========
+// ========== 気象庁アメダス（岱明 86086）から自動取得 ==========
+const AMEDAS_STATION = '86086'; // 熊本県 岱明
+function fillWeatherFields(tmax,tmin,pr,wmax,imported){
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e){ e.value=(v===''||v==null)?'':v; e.classList.toggle('auto-filled',!!imported); } };
+  set('temp-max',tmax); set('temp-min',tmin); set('precip',pr); set('wind-speed',wmax);
+  const badge=document.getElementById('weather-auto-badge'); if(badge) badge.innerHTML=imported?'<span class="auto-badge">気象庁取込</span>':'';
+}
+async function fetchJmaForDate(dateStr, auto){
+  if(!dateStr){ if(!auto) alert('日付を選んでください'); return; }
+  const status=document.getElementById('jma-status');
+  const ymd=dateStr.replace(/-/g,'');
+  if(status && !auto){ status.style.color='#1a6fa3'; status.textContent='🌤️ 気象庁から取得中...'; }
+  const hhs=['00','03','06','09','12','15','18','21'];
+  let temps=[], winds=[], precip=0, files=0;
+  for(const hh of hhs){
+    try{
+      const r=await fetch(`https://www.jma.go.jp/bosai/amedas/data/point/${AMEDAS_STATION}/${ymd}_${hh}.json`);
+      if(!r.ok) continue; files++;
+      const j=await r.json();
+      for(const k in j){ const o=j[k];
+        if(o.temp && typeof o.temp[0]==='number') temps.push(o.temp[0]);
+        if(o.wind && typeof o.wind[0]==='number') winds.push(o.wind[0]);
+        if(o.precipitation10m && typeof o.precipitation10m[0]==='number') precip+=o.precipitation10m[0];
+      }
+    }catch(e){}
+  }
+  if(!temps.length){
+    if(status && !auto){ status.style.color='#c0392b'; status.textContent='⚠️ データが取得できませんでした（未来の日付・当日途中・通信エラーの可能性）'; }
+    return;
+  }
+  const tmax=Math.max(...temps), tmin=Math.min(...temps);
+  const wmax=winds.length?Math.max(...winds):'';
+  const pr=Math.round(precip*10)/10;
+  // 記録に保存
+  const ex=records[dateStr]||{};
+  records[dateStr]={...ex, tempMax:String(tmax), tempMin:String(tmin), precip:String(pr), windSpeed:(wmax===''?'':String(wmax)), jmaImported:true };
+  saveAll();
+  // 表示中の日付なら画面に反映
+  if(document.getElementById('rec-date').value===dateStr){
+    fillWeatherFields(String(tmax),String(tmin),String(pr),(wmax===''?'':String(wmax)),true);
+  }
+  if(status){ status.style.color='#1a6fa3'; status.textContent=`✅ ${dateStr}：最高 ${tmax}℃ ／ 最低 ${tmin}℃ ／ 降水 ${pr}mm ／ 風 ${wmax}m/s（岱明）`; }
+}
+
 function importCSV(input) {
   const file = input.files[0];
   if(!file) return;
