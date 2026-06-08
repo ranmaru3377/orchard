@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>梶原果樹園 管理マップ</title>
+<title>梶原果樹園 スプリンクラー点検</title>
 <style>
 /* required styles */
 
@@ -929,7 +929,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
 <body>
 
 <div id="header">
-  <h1>🍐 梶原果樹園</h1>
+  <h1>💧 スプリンクラー点検</h1>
   <select id="header-task" onchange="onHeaderTaskChange()" style="
     font-size:12px; padding:6px 10px; border-radius:8px;
     border:1px solid rgba(255,255,255,0.5);
@@ -1370,7 +1370,7 @@ let editZid = null;
 let selZColor = ZCOLS[0];
 let panelOpen = false;
 // アプリのモード： map（園地マップ）/ issue（病害虫）/ facility（スプリンクラー点検）
-const APP_MODE = "map";
+const APP_MODE = "facility";
 function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
