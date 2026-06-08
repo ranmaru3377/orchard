@@ -982,6 +982,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
     <div class="tbtn" id="btn-issue" title="病害虫マーク" onclick="setTool('issue')" style="font-size:17px">🐛</div>
     <div class="tbtn" id="btn-line" title="配管ラインを描く" onclick="setTool('line')" style="font-size:17px">📏</div>
     <div class="tbtn" id="btn-facility" title="スプリンクラー・排水口・要修理" onclick="setTool('facility')" style="font-size:17px">💧</div>
+    <div class="tbtn on" id="btn-trees" title="木の表示／非表示" onclick="toggleTrees()" style="font-size:16px;display:none">🌳</div>
     <div class="tbtn" title="全体表示" onclick="fitAll()">⊡</div>
     <div class="tbtn" id="btn-gps" title="現在地" onclick="toggleGps()" style="font-size:18px">📍</div>
     <div class="tbtn" id="btn-compass" title="方位（向き）" onclick="toggleHeading()" style="font-size:18px">🧭</div>
@@ -1371,12 +1372,23 @@ let selZColor = ZCOLS[0];
 let panelOpen = false;
 // アプリのモード： map（園地マップ）/ issue（病害虫）/ facility（スプリンクラー点検）
 const APP_MODE = "issue";
+let treesVisible = true;
+function applyTreesVisibility(){
+  Object.values(markerMap).forEach(m=>{ try{ treesVisible ? m.addTo(map) : map.removeLayer(m); }catch(e){} });
+}
+function toggleTrees(){
+  treesVisible = !treesVisible;
+  applyTreesVisibility();
+  const b=document.getElementById('btn-trees'); if(b) b.classList.toggle('on', treesVisible);
+  document.getElementById('statusbar').textContent = treesVisible ? '🌳 木を表示中' : '🌳 木を非表示中';
+}
 function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
   show('btn-add', m==='map'); show('btn-move', m==='map');
   show('btn-line', m==='facility'); show('btn-facility', m==='facility');
   show('btn-issue', m==='issue');
+  show('btn-trees', m!=='map');   // 病害虫・点検アプリで 木の表示切替を表示
   if(m!=='map'){
     show('panel-toggle', false);
     const side=document.getElementById('side'); if(side){ side.classList.remove('open'); side.style.display='none'; }
@@ -1440,6 +1452,7 @@ function undo() {
   Object.values(lpolyLayers).forEach(l => { try { map.removeLayer(l); } catch(e){} }); lpolyLayers = {}; deselectLine();
   Object.values(facMap).forEach(m => { try { map.removeLayer(m); } catch(e){} }); facMap = {};
   trees.forEach(t => addMarker(t));
+  applyTreesVisibility();
   drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities(); deselect();
   renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
@@ -2824,6 +2837,7 @@ function loadData(e) {
       Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={}; deselectLine();
       Object.values(facMap).forEach(m=>{try{map.removeLayer(m);}catch(e){}}); facMap={};
       trees.forEach(t=>addMarker(t));
+      applyTreesVisibility();
       orchards.forEach(o=>{ if(o.polygon?.length>=3){ opolyLayers[o.id]=L.polygon(o.polygon.map(p=>[p.lat,p.lng]),{color:o.color,weight:2.5,fillOpacity:0.06}).addTo(map); } });
       drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities();
       renderOrchardBar(); renderZoneSelect(); renderZones();
@@ -3015,6 +3029,7 @@ function rebuildFromData(d){
   drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities(); renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
   if(selId && trees.find(t=>t.id===selId)) selectTree(selId); else deselect();
+  applyTreesVisibility();
   fitToHome();   // 初回のみ自宅園へ寄せる
 }
 
