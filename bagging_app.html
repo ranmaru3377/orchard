@@ -56,6 +56,10 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 #list-content input.cell-num{width:74px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:0.78rem;font-family:inherit;}
 #list-content td select{width:auto;min-width:80px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:#fff;}
 #list-content td input[type=date]{width:auto;}
+#summary-content table.cross{border-collapse:collapse;font-size:0.76rem;}
+#summary-content table.cross th,#summary-content table.cross td{padding:6px 8px;border-bottom:1px solid #eee;white-space:nowrap;}
+#summary-content table.cross th{background:var(--green-pale);color:var(--green);text-align:right;}
+#summary-content table.cross th:first-child{text-align:left;}
 </style>
 </head>
 <body>
@@ -561,11 +565,23 @@ function optsHtml(arr,sel){ return '<option value=""></option>'+arr.map(o=>`<opt
 
 function renderList(){
   const el=document.getElementById('list-content');
-  let html='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
-    +'<button class="btn-today" onclick="addRow()">＋ 行を追加</button>'
-    +'<span class="note">表のセルを直接書き換えできます（自動保存）</span></div>';
+  let html=''
+    +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:8px;">'
+    +'<span style="font-size:0.78rem;color:var(--text-light);">行追加：</span>'
+    +'<button class="btn-today" onclick="addRows(1)">＋1</button>'
+    +'<button class="btn-today" onclick="addRows(5)">＋5</button>'
+    +'<button class="btn-today" onclick="addRows(10)">＋10</button>'
+    +'<button class="btn-today" onclick="togglePaste()" style="margin-left:auto;">📋 貼り付け取込</button>'
+    +'</div>';
+  // 貼り付け取込エリア
+  html+='<div id="paste-box" style="display:none;background:#f6faf2;border:1px solid var(--green-pale);border-radius:10px;padding:11px;margin-bottom:10px;">'
+    +'<div class="note" style="margin-bottom:6px;">Excelやスプレッドシートから、次の<b>列の順番</b>でコピーして貼り付け→「取り込む」：<br><b>日付　品種　袋種　園地　区画　枚数　メモ</b><br>（日付は 2026-05-20 や 5/20 でOK。1行1記録）</div>'
+    +'<textarea id="paste-data" placeholder="例）2026-05-20\t新高\tZS17\t自宅園\t中北\t1500\tA品中心" style="width:100%;min-height:90px;font-size:0.8rem;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;"></textarea>'
+    +'<button class="btn-save" style="margin-top:8px;padding:11px;" onclick="importPaste()">この内容を取り込む</button>'
+    +'</div>';
+  html+='<div class="note" style="margin-bottom:6px;">表のセルを直接書き換えできます（自動保存）。✕で行削除。</div>';
   if(records.length===0){
-    el.innerHTML=html+'<div class="empty">📭 まだ記録がありません<br>「＋行を追加」または「入力」から追加してください</div>';
+    el.innerHTML=html+'<div class="empty">📭 まだ記録がありません<br>「＋10」でまとめて行追加、または「📋貼り付け取込」で一括入力できます</div>';
     return;
   }
   const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
@@ -596,11 +612,54 @@ function editField(id,field,val){
   if(tot) tot.textContent=records.reduce((s,x)=>s+(x.count||0),0).toLocaleString();
 }
 
-function addRow(){
+function addRow(){ addRows(1); }
+function addRows(n){
   const today=new Date().toISOString().slice(0,10);
-  records.push({id:Date.now()+Math.floor(Math.random()*1000),date:today,variety:'',count:0,bagType:'',field:'',block:'',workers:'',hours:'',note:''});
+  for(let i=0;i<n;i++){
+    records.push({id:Date.now()+Math.floor(Math.random()*100000)+i,date:today,variety:'',count:0,bagType:'',field:'',block:'',workers:'',hours:'',note:''});
+  }
   localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
   renderList();
+}
+function togglePaste(){
+  const b=document.getElementById('paste-box');
+  b.style.display=(b.style.display==='none'||!b.style.display)?'block':'none';
+}
+function normalizeDate(s){
+  if(!s) return null;
+  s=s.toString().replace(/年/g,'-').replace(/月/g,'-').replace(/日/g,'').trim();
+  let m=s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  m=s.match(/^(\d{1,2})[-/.](\d{1,2})$/);   // M/D → 今年
+  if(m){ const y=new Date().getFullYear(); return `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
+  return null;
+}
+function importPaste(){
+  const ta=document.getElementById('paste-data');
+  const txt=(ta.value||'').trim();
+  if(!txt){alert('貼り付けデータがありません');return;}
+  const lines=txt.split(/\r?\n/).filter(l=>l.trim());
+  let added=0, skipped=0;
+  lines.forEach(line=>{
+    const cols=line.split(/\t/).length>1 ? line.split(/\t/) : line.split(/,/);
+    const c=cols.map(x=>(x||'').trim());
+    const date=normalizeDate(c[0]);
+    if(!date){ skipped++; return; }   // ヘッダーや空行はスキップ
+    const cnt=parseInt((c[5]||'').replace(/[^\d-]/g,''))||0;
+    // 袋種が候補になければ追加
+    if(c[2] && !bagTypes.includes(c[2])) addBagTypeValue(c[2]);
+    records.push({
+      id:Date.now()+Math.floor(Math.random()*1000000),
+      date, variety:c[1]||'', bagType:c[2]||'', field:c[3]||'', block:c[4]||'',
+      count:cnt, workers:'', hours:'', note:c[6]||''
+    });
+    added++;
+  });
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  populateBagSelects();
+  ta.value='';
+  renderList();
+  alert('✅ '+added+'件を取り込みました'+(skipped?`（${skipped}行は日付なしでスキップ）`:''));
 }
 
 function editCount(id,val){
@@ -664,11 +723,36 @@ function renderSummary(){
   }
   el.innerHTML=
     `<div class="summary-row" style="background:#f6faf2;border-radius:8px;padding:9px 11px;margin-bottom:4px;"><span style="font-weight:700">${yr}年 合計</span><span class="v" style="font-size:1.15rem">${yearTotal.toLocaleString()}枚</span></div>`+
+    crossTableHtml(filtered)+
     section('📅 日付ごと枚数','date',true)+
     section('🍐 品種ごと合計','variety',false)+
     section('🛍️ 袋種ごと合計','bagType',false)+
     section('📍 園地ごと合計','field',false)+
     section('🗺️ 区画ごと合計','block',false);
+}
+
+function crossTableHtml(filtered){
+  let vars=[], bags=[];
+  filtered.forEach(r=>{ const v=r.variety||'(未設定)', b=r.bagType||'(未設定)'; if(!vars.includes(v))vars.push(v); if(!bags.includes(b))bags.push(b); });
+  const vOrder=[...VARIETIES,'(未設定)'], bOrder=[...bagTypes,'(未設定)'];
+  vars.sort((a,b)=>{const ia=vOrder.indexOf(a),ib=vOrder.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
+  bags.sort((a,b)=>{const ia=bOrder.indexOf(a),ib=bOrder.indexOf(b);return (ia<0?99:ia)-(ib<0?99:ib);});
+  const mat={}; vars.forEach(v=>mat[v]={}); const colTot={}; let grand=0;
+  filtered.forEach(r=>{ const v=r.variety||'(未設定)', b=r.bagType||'(未設定)', c=r.count||0; mat[v][b]=(mat[v][b]||0)+c; colTot[b]=(colTot[b]||0)+c; grand+=c; });
+  let h='<div style="font-weight:700;color:var(--green);margin:16px 0 4px;border-bottom:1.5px solid var(--green-pale);padding-bottom:4px;">🧮 品種 × 袋種 別 枚数（行末＝品種合計）</div>';
+  h+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table class="cross">';
+  h+='<tr><th style="position:sticky;left:0;">品種＼袋種</th>'+bags.map(b=>`<th>${b}</th>`).join('')+'<th style="background:#dce9cf;">計</th></tr>';
+  vars.forEach(v=>{
+    const rowTot=bags.reduce((s,b)=>s+(mat[v][b]||0),0);
+    h+=`<tr><td style="position:sticky;left:0;background:#fff;font-weight:600;">${v}</td>`+
+      bags.map(b=>`<td style="text-align:right;">${mat[v][b]?mat[v][b].toLocaleString():'-'}</td>`).join('')+
+      `<td style="text-align:right;font-weight:700;color:var(--green);background:#f6faf2;">${rowTot.toLocaleString()}</td></tr>`;
+  });
+  h+=`<tr style="border-top:2px solid var(--green);font-weight:700;background:#f6faf2;"><td style="position:sticky;left:0;background:#f6faf2;">袋種計</td>`+
+    bags.map(b=>`<td style="text-align:right;">${(colTot[b]||0).toLocaleString()}</td>`).join('')+
+    `<td style="text-align:right;">${grand.toLocaleString()}</td></tr>`;
+  h+='</table></div>';
+  return h;
 }
 
 init();
