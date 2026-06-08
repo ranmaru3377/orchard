@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>梶原果樹園 資材在庫・発注管理</title>
+<title>梶原果樹園 農薬在庫・発注管理</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script>
@@ -17,7 +17,7 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "1029372905399",
   appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
 };
-const FIREBASE_PATH = "kajiwara_materials";
+const FIREBASE_PATH = "kajiwara_pesticides";
 </script>
 <style>
 :root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--amber:#e8870c;}
@@ -61,8 +61,8 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
 <body>
 <header>
   <div>
-    <h1>📦 梶原果樹園 資材在庫・発注管理</h1>
-    <div class="sub">荒尾市 ― 在庫・使用量・発注予定</div>
+    <h1>🧪 梶原果樹園 農薬在庫・発注管理</h1>
+    <div class="sub">荒尾市 ― 農薬在庫・使用量・発注予定</div>
   </div>
   <span id="sync-dot">接続中…</span>
 </header>
@@ -78,8 +78,8 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
   <div class="bar">
     <label style="font-size:0.8rem;color:var(--text-light);">今年</label>
     <input type="number" id="mat-year" style="width:84px;" onchange="render()">
-    <button class="btn" onclick="addItem()">＋ 資材を追加</button>
-    <button class="btn" onclick="carryAll()" title="全資材の前年期末を今年期首へコピー">前年末→今年期首</button>
+    <button class="btn" onclick="addItem()">＋ 農薬を追加</button>
+    <button class="btn" onclick="carryAll()" title="全農薬の前年期末を今年期首へコピー">前年末→今年期首</button>
   </div>
   <div class="bar">
     <span style="font-size:0.78rem;color:var(--text-light);">単価：</span>
@@ -87,7 +87,7 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     <button class="btn" onclick="togglePricePaste()">📋 単価を貼付更新</button>
   </div>
   <div id="price-paste" style="display:none;background:#fff7e6;border:1px solid #f0c060;border-radius:10px;padding:11px;margin-bottom:10px;">
-    <div class="note" style="margin-bottom:6px;">注文書や見積を見ながら、<b>資材名　単価</b> の順で1行ずつ貼り付け／入力 →「今年の単価を更新」。<br>（タブ・カンマ・スペース区切りOK。名前が一致する資材の<span id="pp-year"></span>年単価を上書き）</div>
+    <div class="note" style="margin-bottom:6px;">注文書や見積を見ながら、<b>農薬名　単価</b> の順で1行ずつ貼り付け／入力 →「今年の単価を更新」。<br>（タブ・カンマ・スペース区切りOK。名前が一致する農薬の<span id="pp-year"></span>年単価を上書き）</div>
     <textarea id="price-data" placeholder="例）10kg(L)\t120&#10;5㎏強化(L)\t105" style="width:100%;min-height:90px;font-size:0.8rem;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;"></textarea>
     <button class="btn solid" style="width:100%;margin-top:8px;" onclick="importPrices()">今年の単価を更新</button>
   </div>
@@ -104,7 +104,7 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     <input type="number" id="order-year" style="width:84px;" onchange="renderOrder()">
     <button class="btn" onclick="copySuggestAll()">目安を発注予定に一括コピー</button>
   </div>
-  <div class="note" style="margin-bottom:8px;">発注予定（手入力）が1以上の資材を一覧表示します。発注の控えにお使いください。</div>
+  <div class="note" style="margin-bottom:8px;">発注予定（手入力）が1以上の農薬を一覧表示します。発注の控えにお使いください。</div>
   <div id="order-content"></div>
 </div>
 
@@ -129,9 +129,9 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     </div>
   </div>
   <div class="card">
-    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">📥 標準資材リストの読み込み</div>
-    <div class="note" style="margin-bottom:8px;">元Excel（梨資材計算表）の品目を一括で読み込みます。読み込み後は在庫表で数字を打つだけ。<br>※ 同じ名前の資材は重複追加しません。</div>
-    <button class="btn solid" style="width:100%;" onclick="loadStandard()">📥 元Excelの資材品目を読み込む</button>
+    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">📥 標準農薬リストの読み込み</div>
+    <div class="note" style="margin-bottom:8px;">元Excel（農薬集計表）の農薬を一括で読み込みます。読み込み後は在庫表で数字を打つだけ。<br>※ 同じ名前の農薬は重複追加しません。</div>
+    <button class="btn solid" style="width:100%;" onclick="loadStandard()">📥 元Excelの農薬品目を読み込む</button>
   </div>
   <div class="card">
     <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">📤 バックアップ</div>
@@ -141,30 +141,17 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
 </div>
 
 <script>
-const DEFAULT_CATS=['段ボール箱','トレー','ネットキャップ','緩衝・包装'];
-const DEFAULT_SUBS=['組立','強化','化粧','個入','その他箱','5kg','7.5kg','モールド','3kg','2kg','W系','P系','Y・G系','段','ネット','紙・パッド','封緘'];
-// 元Excel（梨資材計算表）の標準品目 [カテゴリ, サブ, [品目]]
+const DEFAULT_CATS=['殺菌剤','殺虫剤','殺ダニ剤','成長調整・その他'];
+const DEFAULT_SUBS=[];
+// 元Excel（農薬集計表）の標準農薬 [カテゴリ, サブ, [品目]]
 const STANDARD=[
-  ['段ボール箱','組立',['5kg組立(M)','5kg組立(L)','5kg組立(LL)','2kg組立(M)','2kg組立(L)']],
-  ['段ボール箱','強化',['5kg強化(M)','5kg強化(L)','5kg強化(LL)','4kg強化(特S)','4kg強化(M)','4kg強化(L)','2.5kg強化(特)','2kg強化(JA)','2kg強化(坂上)']],
-  ['段ボール箱','化粧',['3kg化粧(JA)','4kg化粧(坂上)']],
-  ['段ボール箱','個入',['2個入(JA)','2個入(坂上)','2個入(白)(旬)','2玉入り(写真)','3玉入り(写真)','1個入(JA)']],
-  ['段ボール箱','その他箱',['10kg(L)','旧7.5kg(L)','旧7.5kg(LL)','160型(L)','160型(LL)','C段(茶)','C段(オレンジ)','80(特S)','80型(M)','80型(L)']],
-  ['トレー','5kg',['5','6','7','8','9','10','11','12','13','14','15','16','18','20','22']],
-  ['トレー','7.5kg',['3','4','5','6','7','8','9']],
-  ['トレー','モールド',['3','4','5','6','7','8','9']],
-  ['トレー','3kg',['4','5','6','7','8','9','10','11','12']],
-  ['トレー','2kg',['4','5','6','7','8','9']],
-  ['ネットキャップ','W系',['W13','W14','W15','W16','W17','W18']],
-  ['ネットキャップ','P系',['P7','P9','P11','P13']],
-  ['ネットキャップ','Y・G系',['Y9','Y11','G9','G11']],
-  ['緩衝・包装','段',['両断','片段']],
-  ['緩衝・包装','ネット',['ネット(7.5kg)','ネット(5kg)','ネット(C段用)','ネット(80用)']],
-  ['緩衝・包装','紙・パッド',['調整板','MEパッド','ミラダン','ロール紙(荒尾梨)','ロール紙(あきづき)']],
-  ['緩衝・包装','封緘',['封緘針(2000本)','封緘針(クボタ)']]
+  ['殺菌剤','',['アンビル','オーソサイド','オンリーワン','ドキリン','ジマンダイセン','スコア250','スコア335','ストロビー','石灰硫黄','デラン','トップジン','ナリア','フロンサイド','ベルクートF','ベルクート水','ポリオキシン','ベンレート','ポリベリン','ユニックス','フルーツガード','フルーツセイバー','インダー','アミスター','チオノック','ファンタジスタ','アントラコール','オキシラン1kg','ミギワ','スクレア','カナメ','セルカディス','アクサー']],
+  ['殺虫剤','',['アクタラ','アドマイヤー','アプロード','アルバリン','オリオン','サイアノックス','ロディー','スプラサイド','スミチオン500','スミチオン1000','ダイアジノン','ダーズバン','パーマチオン','バリアード','フェニックス','ミクロデナポン','ディアナ','トランスフォーム','ウララ','コルト','サムコル','エクシレル','テルスター','モスピラン']],
+  ['殺ダニ剤','',['カネマイト','コロマイト','サンマイト','スターマイト','ハチハチ','マイトコーネ','ダニコング','コテツ','モベント']],
+  ['成長調整・その他','',['ジベレリン','アビオン','ボルドー','ラウンドアップ','クレフノン','ストッポール','バイタルCA','アドバンスM','ルビスク','硝酸石灰','サム','ダーウィン','ジューシーカル','ハイカル','リンクエース','ロビンフット']]
 ];
 function loadStandard(){
-  if(!confirm('元Excelの標準資材リストを読み込みますか？\n（既にある同名の資材は重複追加しません）'))return;
+  if(!confirm('元Excelの標準農薬リストを読み込みますか？\n（既にある同名の農薬は重複追加しません）'))return;
   let added=0, seq=0;
   STANDARD.forEach(([cat,sub,names])=>{
     if(!cats.includes(cat)) cats.push(cat);
@@ -181,7 +168,7 @@ function loadStandard(){
   document.getElementById('page-table').classList.add('active');
   document.querySelectorAll('.tab-btn')[0].classList.add('active');
   render();
-  alert('✅ '+added+'件の資材を読み込みました。在庫表で数字を入力してください。');
+  alert('✅ '+added+'件の農薬を読み込みました。在庫表で数字を入力してください。');
 }
 let materials=[];
 let cats=DEFAULT_CATS.slice();
@@ -217,7 +204,7 @@ function render(){
   document.getElementById('py-label').textContent=py;
   document.getElementById('ty-label').textContent=y;
   const wrap=document.getElementById('table-wrap');
-  if(!materials.length){ wrap.innerHTML='<div class="empty">資材がまだありません<br>「＋資材を追加」で登録してください</div>'; return; }
+  if(!materials.length){ wrap.innerHTML='<div class="empty">農薬がまだありません<br>「＋農薬を追加」で登録してください</div>'; return; }
   // カテゴリ順→サブ順→名前順
   const order=[...cats]; const sorted=[...materials].sort((a,b)=>{
     const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);
@@ -229,7 +216,7 @@ function render(){
   let stockValTotal=0;
   let h='<datalist id="sub-list">'+subList.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
   h+='<table><tr>'
-    +'<th>カテゴリ</th><th>サブ</th><th>資材名</th><th>単位</th>'
+    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
     +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
     +`<th class="ty">単価(円)</th><th class="ty">在庫金額</th>`
@@ -274,12 +261,12 @@ function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&
 function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return; it[f]=v; if(f==='sub'&&v&&!subs.includes(v)) subs.push(v); persist(); render(); }
 function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
 function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
-function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この資材')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
+function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この農薬')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
 function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',unit:'',years:{},plan:{}}); persist(); render(); }
 
 function carryAll(){
   const y=curYear(), py=y-1;
-  if(!confirm(py+'年の期末在庫を、'+y+'年の期首在庫へ全資材コピーしますか？'))return;
+  if(!confirm(py+'年の期末在庫を、'+y+'年の期首在庫へ全農薬コピーしますか？'))return;
   materials.forEach(it=>{ const pd=ydOf(it,py), td=ydOf(it,y); td.s=num(pd.e); });
   persist(); render();
 }
@@ -287,13 +274,13 @@ function carryAll(){
 // ===== 単価の一括操作 =====
 function carryPrice(){
   const y=curYear(), py=y-1;
-  if(!confirm(py+'年の単価を、'+y+'年の単価へ全資材コピーしますか？\n（その後、値上げ分を編集できます）'))return;
+  if(!confirm(py+'年の単価を、'+y+'年の単価へ全農薬コピーしますか？\n（その後、値上げ分を編集できます）'))return;
   materials.forEach(it=>{ const pd=ydOf(it,py), td=ydOf(it,y); if(num(pd.p)>0) td.p=num(pd.p); });
   persist(); render();
 }
 function raisePrices(){
   const y=curYear();
-  const pct=prompt(y+'年の単価を一律何％値上げしますか？（例：5）\n※前年単価が未入力の資材は、まず「前年単価→今年」でコピーしてください');
+  const pct=prompt(y+'年の単価を一律何％値上げしますか？（例：5）\n※前年単価が未入力の農薬は、まず「前年単価→今年」でコピーしてください');
   if(pct===null)return;
   const r=parseFloat(pct); if(isNaN(r)){alert('数値を入れてください');return;}
   materials.forEach(it=>{ const td=ydOf(it,y); if(num(td.p)>0){ td.p=Math.round(num(td.p)*(1+r/100)); } });
@@ -339,7 +326,7 @@ function renderOrder(){
   const y=parseInt(document.getElementById('order-year').value)||new Date().getFullYear();
   const el=document.getElementById('order-content');
   const list=materials.filter(it=>planOf(it,y)>0);
-  if(!list.length){ el.innerHTML='<div class="empty">発注予定（1以上）の資材はありません<br>在庫表で「発注予定」を入れるか、上の「目安を一括コピー」を押してください</div>'; return; }
+  if(!list.length){ el.innerHTML='<div class="empty">発注予定（1以上）の農薬はありません<br>在庫表で「発注予定」を入れるか、上の「目安を一括コピー」を押してください</div>'; return; }
   const order=[...cats];
   list.sort((a,b)=>{const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);return (ca<0?99:ca)-(cb<0?99:cb)||(a.sub||'').localeCompare(b.sub||'')||(a.name||'').localeCompare(b.name||'');});
   const groups={}; list.forEach(it=>{ const key=(it.cat||'(未分類)')+(it.sub?' ＞ '+it.sub:''); (groups[key]=groups[key]||[]).push(it); });
@@ -373,7 +360,7 @@ function editCat(i){
 function delCat(i){
   const c=cats[i];
   const cnt=materials.filter(m=>m.cat===c).length;
-  if(!confirm('カテゴリ「'+c+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の資材は「未分類」になります。資材自体は残ります）':'')))return;
+  if(!confirm('カテゴリ「'+c+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の農薬は「未分類」になります。農薬自体は残ります）':'')))return;
   materials.forEach(m=>{ if(m.cat===c) m.cat=''; });
   cats.splice(i,1); persist(); renderCatList(); render();
 }
@@ -394,15 +381,15 @@ function editSub(i){
 function delSub(i){
   const s=subs[i];
   const cnt=materials.filter(m=>m.sub===s).length;
-  if(!confirm('サブカテゴリ「'+s+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の資材のサブが空になります。資材自体は残ります）':'')))return;
+  if(!confirm('サブカテゴリ「'+s+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の農薬のサブが空になります。農薬自体は残ります）':'')))return;
   materials.forEach(m=>{ if(m.sub===s) m.sub=''; });
   subs.splice(i,1); persist(); renderSubMgr(); render();
 }
 
 function exportJson(){
   const data=JSON.stringify({materials,cats},null,2);
-  const fname='kajiwara_shizai_'+new Date().toISOString().slice(0,10)+'.json';
-  try{ if(navigator.share){ const f=new File([data],fname,{type:'application/json'}); navigator.share({files:[f],title:'資材データ'}).catch(()=>dl(data,fname)); } else dl(data,fname); }catch(e){ dl(data,fname); }
+  const fname='kajiwara_noyaku_'+new Date().toISOString().slice(0,10)+'.json';
+  try{ if(navigator.share){ const f=new File([data],fname,{type:'application/json'}); navigator.share({files:[f],title:'農薬データ'}).catch(()=>dl(data,fname)); } else dl(data,fname); }catch(e){ dl(data,fname); }
 }
 function dl(data,fname){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'})); a.download=fname; document.body.appendChild(a); a.click(); setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},100); }
 

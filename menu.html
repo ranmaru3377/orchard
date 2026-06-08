@@ -75,6 +75,11 @@ header{background:var(--green);color:#fff;padding:20px 16px 18px;}
 </div>
 
 <div class="section">
+  <div id="recent-wrap" style="display:none;">
+    <div class="section-title" style="margin-top:16px;">🕘 最近使った</div>
+    <div class="grid" id="recent-grid"></div>
+  </div>
+
   <div class="section-title" style="margin-top:16px;">📋 日常管理</div>
   <div class="grid">
     <a class="app-card c-diary" href="kajiwara_diary_v2.html">
@@ -115,12 +120,6 @@ header{background:var(--green);color:#fff;padding:20px 16px 18px;}
       <div class="ac-name">花粉採取管理</div>
       <div class="ac-desc">採取・使用・在庫を枚数で管理</div>
     </a>
-    <a class="app-card c-mat" href="資材管理アプリ.html">
-      <div class="ac-bar"></div>
-      <div class="ac-icon">📦</div>
-      <div class="ac-name">資材在庫・発注</div>
-      <div class="ac-desc">在庫・使用量・発注予定（家族で共有）</div>
-    </a>
     <a class="app-card c-bag" href="bagging_app.html">
       <div class="ac-bar"></div>
       <div class="ac-icon">🛍️</div>
@@ -149,6 +148,12 @@ header{background:var(--green);color:#fff;padding:20px 16px 18px;}
       <div class="ac-name">施肥管理</div>
       <div class="ac-desc">肥料・施肥目的・方法・袋数管理</div>
     </a>
+    <a class="app-card c-pest" href="農薬管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">🧪</div>
+      <div class="ac-name">農薬在庫・発注</div>
+      <div class="ac-desc">農薬の在庫・使用量・発注予定（家族で共有）</div>
+    </a>
   </div>
 
   <div class="section-title">📁 書類・事務</div>
@@ -158,6 +163,12 @@ header{background:var(--green);color:#fff;padding:20px 16px 18px;}
       <div class="ac-icon">🗂️</div>
       <div class="ac-name">書類管理</div>
       <div class="ac-desc">紙書類を写真・PDFで保管（家族で共有）</div>
+    </a>
+    <a class="app-card c-mat" href="資材管理アプリ.html">
+      <div class="ac-bar"></div>
+      <div class="ac-icon">📦</div>
+      <div class="ac-name">資材在庫・発注</div>
+      <div class="ac-desc">在庫・使用量・発注予定（家族で共有）</div>
     </a>
   </div>
 
@@ -205,8 +216,46 @@ function updateSeason(){
   }
 }
 
+// ===== 最近使ったアプリ =====
+const RECENT_KEY='kajiwara_recent_apps';
+function getRecents(){ try{ return JSON.parse(localStorage.getItem(RECENT_KEY)||'[]'); }catch(e){ return []; } }
+function recordUse(href,name,icon,colorClass){
+  let list=getRecents().filter(x=>x.href!==href);
+  list.unshift({href,name,icon,colorClass});
+  list=list.slice(0,6);
+  localStorage.setItem(RECENT_KEY,JSON.stringify(list));
+}
+function bindUsage(){
+  document.querySelectorAll('.app-card[href]').forEach(a=>{
+    if(a.dataset.recentBound) return;
+    a.dataset.recentBound='1';
+    a.addEventListener('click',()=>{
+      const name=a.querySelector('.ac-name')?.textContent||'';
+      const icon=a.querySelector('.ac-icon')?.textContent||'📄';
+      const cc=[...a.classList].find(c=>c.startsWith('c-'))||'';
+      recordUse(a.getAttribute('href'),name,icon,cc);
+    });
+  });
+}
+function renderRecents(){
+  const list=getRecents().slice(0,3);
+  const wrap=document.getElementById('recent-wrap');
+  const grid=document.getElementById('recent-grid');
+  if(!list.length){ wrap.style.display='none'; return; }
+  wrap.style.display='block';
+  grid.innerHTML=list.map(x=>`<a class="app-card ${x.colorClass||''}" href="${x.href}">
+    <div class="ac-bar"></div>
+    <div class="ac-icon">${x.icon||'📄'}</div>
+    <div class="ac-name">${x.name||''}</div>
+    <div class="ac-desc">最近使ったアプリ</div>
+  </a>`).join('');
+  bindUsage();
+}
+
 updateDate();
 updateSeason();
+renderRecents();
+bindUsage();
 </script>
 </body>
 </html>
