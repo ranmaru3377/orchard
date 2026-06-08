@@ -54,6 +54,8 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 #list-content th{background:var(--green-pale);color:var(--green);padding:7px 6px;text-align:left;white-space:nowrap;position:sticky;top:0;}
 #list-content td{padding:6px 6px;border-bottom:1px solid #eee;}
 #list-content input.cell-num{width:74px;text-align:right;padding:4px 6px;border:1px solid var(--border);border-radius:5px;font-size:0.78rem;font-family:inherit;}
+#list-content td select{width:auto;min-width:80px;padding:3px 4px;border:1px solid var(--border);border-radius:5px;font-family:inherit;background:#fff;}
+#list-content td input[type=date]{width:auto;}
 </style>
 </head>
 <body>
@@ -553,29 +555,52 @@ function setSync(id,msg){const el=document.getElementById(id);if(el)el.textConte
 
 function esc(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
+const FIELD_OPTS=['長洲園','新図園畑','新図園山','自宅園'];
+const BLOCK_OPTS=['二十世紀','中北','中南','旧ハウス','若木'];
+function optsHtml(arr,sel){ return '<option value=""></option>'+arr.map(o=>`<option value="${esc(o)}" ${o===sel?'selected':''}>${esc(o)}</option>`).join(''); }
+
 function renderList(){
   const el=document.getElementById('list-content');
-  if(records.length===0){el.innerHTML='<div class="empty">📭 まだ記録がありません</div>';return;}
+  let html='<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px;">'
+    +'<button class="btn-today" onclick="addRow()">＋ 行を追加</button>'
+    +'<span class="note">表のセルを直接書き換えできます（自動保存）</span></div>';
+  if(records.length===0){
+    el.innerHTML=html+'<div class="empty">📭 まだ記録がありません<br>「＋行を追加」または「入力」から追加してください</div>';
+    return;
+  }
   const sorted=[...records].sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   const total=sorted.reduce((s,r)=>s+(r.count||0),0);
-  let html='<div class="note" style="margin-bottom:6px;">枚数は直接書き換えできます。✏️で全項目を編集、✕で削除。</div>';
   html+='<div style="overflow-x:auto;-webkit-overflow-scrolling:touch;"><table>';
-  html+='<tr><th>日付</th><th>品種</th><th>袋種</th><th>園地</th><th>区画</th><th style="text-align:right;">枚数</th><th>操作</th></tr>';
-  html+=sorted.map(r=>{
-    const[y,m,d]=r.date.split('-');
-    return `<tr>
-      <td style="white-space:nowrap;">${+m}/${+d}</td>
-      <td>${esc(r.variety)}</td>
-      <td style="white-space:nowrap;">${esc(r.bagType)}</td>
-      <td>${esc(r.field)}</td>
-      <td>${esc(r.block)}</td>
-      <td style="text-align:right;"><input type="number" class="cell-num" value="${r.count||0}" onchange="editCount(${r.id},this.value)"></td>
-      <td style="white-space:nowrap;"><span style="color:#1565c0;cursor:pointer;font-size:0.95rem;" onclick="editRec(${r.id})">✏️</span> <span style="color:#ccc;cursor:pointer;font-size:0.95rem;margin-left:6px;" onclick="delRec(${r.id})">✕</span></td>
-    </tr>`;
-  }).join('');
-  html+=`<tr style="border-top:2px solid var(--green);font-weight:700;background:#f6faf2;"><td colspan="5" style="text-align:right;">合計</td><td style="text-align:right;">${total.toLocaleString()}</td><td></td></tr>`;
+  html+='<tr><th>日付</th><th>品種</th><th>袋種</th><th>園地</th><th>区画</th><th style="text-align:right;">枚数</th><th>メモ</th><th></th></tr>';
+  html+=sorted.map(r=>`<tr>
+    <td><input type="date" value="${r.date||''}" onchange="editField(${r.id},'date',this.value)" style="font-size:0.74rem;padding:3px 4px;border:1px solid var(--border);border-radius:5px;"></td>
+    <td><select onchange="editField(${r.id},'variety',this.value)" style="font-size:0.76rem;">${optsHtml(VARIETIES,r.variety)}</select></td>
+    <td><select onchange="editField(${r.id},'bagType',this.value)" style="font-size:0.76rem;">${optsHtml(bagTypes.filter(t=>t!=='その他'),r.bagType)}</select></td>
+    <td><select onchange="editField(${r.id},'field',this.value)" style="font-size:0.76rem;">${optsHtml(FIELD_OPTS,r.field)}</select></td>
+    <td><select onchange="editField(${r.id},'block',this.value)" style="font-size:0.76rem;">${optsHtml(BLOCK_OPTS,r.block)}</select></td>
+    <td style="text-align:right;"><input type="number" class="cell-num" value="${r.count||0}" onchange="editField(${r.id},'count',this.value)"></td>
+    <td><input type="text" value="${esc(r.note)}" onchange="editField(${r.id},'note',this.value)" style="width:110px;font-size:0.76rem;padding:3px 5px;border:1px solid var(--border);border-radius:5px;"></td>
+    <td><span style="color:#ccc;cursor:pointer;font-size:1rem;" onclick="delRec(${r.id})">✕</span></td>
+  </tr>`).join('');
+  html+=`<tr style="border-top:2px solid var(--green);font-weight:700;background:#f6faf2;"><td colspan="5" style="text-align:right;">合計</td><td style="text-align:right;" id="list-total">${total.toLocaleString()}</td><td colspan="2"></td></tr>`;
   html+='</table></div>';
   el.innerHTML=html;
+}
+
+function editField(id,field,val){
+  const r=records.find(x=>x.id===id); if(!r)return;
+  if(field==='count'){ const n=parseInt(val); r.count=isNaN(n)?0:Math.max(0,n); }
+  else { r[field]=val; }
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  const tot=document.getElementById('list-total');
+  if(tot) tot.textContent=records.reduce((s,x)=>s+(x.count||0),0).toLocaleString();
+}
+
+function addRow(){
+  const today=new Date().toISOString().slice(0,10);
+  records.push({id:Date.now()+Math.floor(Math.random()*1000),date:today,variety:'',count:0,bagType:'',field:'',block:'',workers:'',hours:'',note:''});
+  localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
+  renderList();
 }
 
 function editCount(id,val){
