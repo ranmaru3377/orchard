@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>梶原果樹園 資材在庫・発注管理</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+const FIREBASE_PATH = "kajiwara_materials";
+</script>
+<style>
+:root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--amber:#e8870c;}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+body{font-family:-apple-system,'Hiragino Sans','Noto Sans JP',sans-serif;background:#f4f3ec;color:var(--text);padding-bottom:40px;}
+header{background:var(--green);color:#fff;padding:14px 16px;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;}
+header h1{font-size:1.05rem;}
+header .sub{font-size:0.72rem;opacity:0.85;margin-top:2px;}
+#sync-dot{font-size:0.7rem;padding:4px 10px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;margin-left:auto;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:9;}
+.tab-btn{flex:1;padding:11px 4px;border:none;background:none;font-size:0.82rem;color:var(--text-light);cursor:pointer;font-family:inherit;border-bottom:2.5px solid transparent;}
+.tab-btn.active{color:var(--green);font-weight:700;border-bottom-color:var(--green);}
+.page{display:none;padding:12px;}
+.page.active{display:block;}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:12px;}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.btn{padding:8px 12px;border:1.5px solid var(--green-mid);background:#fff;color:var(--green);border-radius:8px;font-size:0.82rem;cursor:pointer;font-family:inherit;}
+.btn.solid{background:var(--green);color:#fff;border-color:var(--green);}
+input,select{font-family:inherit;}
+input[type=number],input[type=text],select{border:1px solid var(--border);border-radius:6px;padding:5px 7px;font-size:0.82rem;background:#fff;}
+.note{font-size:0.72rem;color:var(--text-light);line-height:1.7;}
+table{border-collapse:collapse;font-size:0.76rem;}
+th,td{padding:5px 6px;border-bottom:1px solid #eee;white-space:nowrap;}
+th{background:var(--green-pale);color:var(--green);position:sticky;top:0;}
+th.py{background:#fdf0dd;color:#9a5a00;}
+th.ty{background:#e3f0fb;color:#1a5a8a;}
+td.calc{background:#fafafa;color:#333;text-align:right;font-weight:600;}
+td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
+.cell{width:62px;text-align:right;}
+.cell-name{width:130px;text-align:left;}
+.cell-unit{width:46px;}
+.scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.sumrow td{font-weight:700;background:#f6faf2;border-top:2px solid var(--green);}
+.empty{text-align:center;color:var(--text-light);padding:24px;font-size:0.9rem;line-height:1.9;}
+/* 発注リスト */
+.order-cat{font-weight:700;color:var(--green);margin:14px 0 4px;border-bottom:1.5px solid var(--green-pale);padding-bottom:4px;}
+.order-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #eee;}
+.order-row .v{font-weight:700;color:var(--amber);font-size:1rem;}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>📦 梶原果樹園 資材在庫・発注管理</h1>
+    <div class="sub">荒尾市 ― 在庫・使用量・発注予定</div>
+  </div>
+  <span id="sync-dot">接続中…</span>
+</header>
+
+<div class="tabs">
+  <button class="tab-btn active" onclick="showPage('table',event)">📋 在庫表</button>
+  <button class="tab-btn" onclick="showPage('order',event)">🛒 発注リスト</button>
+  <button class="tab-btn" onclick="showPage('cat',event)">⚙ 設定</button>
+</div>
+
+<!-- 在庫表ページ -->
+<div id="page-table" class="page active">
+  <div class="bar">
+    <label style="font-size:0.8rem;color:var(--text-light);">今年</label>
+    <input type="number" id="mat-year" style="width:84px;" onchange="render()">
+    <button class="btn" onclick="addItem()">＋ 資材を追加</button>
+    <button class="btn" onclick="carryAll()" title="全資材の前年期末を今年期首へコピー">前年末→今年期首</button>
+  </div>
+  <div class="note" style="margin-bottom:8px;">
+    🟧前年（<span id="py-label"></span>） / 🟦今年（<span id="ty-label"></span>）。<b>使用量＝期首＋発注−期末</b>。<b>発注目安＝前年使用量−（今年期首＋今年発注済）</b>。セルは直接編集できます。
+  </div>
+  <div class="scroll"><div id="table-wrap"></div></div>
+</div>
+
+<!-- 発注リストページ -->
+<div id="page-order" class="page">
+  <div class="bar">
+    <label style="font-size:0.8rem;color:var(--text-light);">対象年</label>
+    <input type="number" id="order-year" style="width:84px;" onchange="renderOrder()">
+    <button class="btn" onclick="copySuggestAll()">目安を発注予定に一括コピー</button>
+  </div>
+  <div class="note" style="margin-bottom:8px;">発注予定（手入力）が1以上の資材を一覧表示します。発注の控えにお使いください。</div>
+  <div id="order-content"></div>
+</div>
+
+<!-- 設定ページ -->
+<div id="page-cat" class="page">
+  <div class="card">
+    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">🏷️ カテゴリの管理</div>
+    <div id="cat-list"></div>
+    <div style="display:flex;gap:6px;margin-top:8px;">
+      <input type="text" id="new-cat" placeholder="カテゴリを追加" style="flex:1;">
+      <button class="btn" onclick="addCat()">＋追加</button>
+    </div>
+  </div>
+  <div class="card">
+    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">📤 バックアップ</div>
+    <div class="note" style="margin-bottom:8px;">データはクラウドで家族と共有されます。手元に控えを保存することもできます。</div>
+    <button class="btn solid" style="width:100%;" onclick="exportJson()">💾 データを書き出す（JSON）</button>
+  </div>
+</div>
+
+<script>
+const DEFAULT_CATS=['段ボール箱','トレー','緩衝材（ネット等）','包装紙・パッド','封緘・その他'];
+let materials=[];
+let cats=DEFAULT_CATS.slice();
+
+function num(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
+function ydOf(it,y){ if(!it.years) it.years={}; if(!it.years[y]) it.years[y]={s:0,o:0,e:0}; return it.years[y]; }
+function usage(it,y){ const d=ydOf(it,y); return num(d.s)+num(d.o)-num(d.e); }
+function planOf(it,y){ return (it.plan&&it.plan[y]!=null)?num(it.plan[y]):null; }
+function curYear(){ return parseInt(document.getElementById('mat-year').value)||new Date().getFullYear(); }
+
+function init(){
+  document.getElementById('mat-year').value=new Date().getFullYear();
+  document.getElementById('order-year').value=new Date().getFullYear();
+  renderCatList();
+  render();
+}
+
+function showPage(name,e){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  e.target.classList.add('active');
+  if(name==='order') renderOrder();
+  if(name==='cat') renderCatList();
+  if(name==='table') render();
+}
+
+function catOpts(sel){ return '<option value=""></option>'+cats.map(c=>`<option ${c===sel?'selected':''}>${c}</option>`).join(''); }
+
+function render(){
+  const y=curYear(), py=y-1;
+  document.getElementById('py-label').textContent=py;
+  document.getElementById('ty-label').textContent=y;
+  const wrap=document.getElementById('table-wrap');
+  if(!materials.length){ wrap.innerHTML='<div class="empty">資材がまだありません<br>「＋資材を追加」で登録してください</div>'; return; }
+  // カテゴリ順→名前順
+  const order=[...cats]; const sorted=[...materials].sort((a,b)=>{
+    const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);
+    return (ca<0?99:ca)-(cb<0?99:cb) || (a.name||'').localeCompare(b.name||'');
+  });
+  let h='<table><tr>'
+    +'<th>カテゴリ</th><th>資材名</th><th>単位</th>'
+    +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
+    +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
+    +'<th class="sug">発注目安</th><th>発注予定</th><th></th></tr>';
+  sorted.forEach(it=>{
+    const pd=ydOf(it,py), td=ydOf(it,y);
+    const pu=usage(it,py), tu=usage(it,y);
+    const have=num(td.s)+num(td.o);
+    const suggest=Math.max(0, pu-have);
+    const plan=planOf(it,y);
+    h+=`<tr>
+      <td><select onchange="setField('${it.id}','cat',this.value)">${catOpts(it.cat)}</select></td>
+      <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
+      <td><input type="text" class="cell-unit" value="${esc(it.unit)}" onchange="setField('${it.id}','unit',this.value)"></td>
+      <td><input type="number" class="cell" value="${pd.s||0}" onchange="setYear('${it.id}',${py},'s',this.value)"></td>
+      <td><input type="number" class="cell" value="${pd.o||0}" onchange="setYear('${it.id}',${py},'o',this.value)"></td>
+      <td><input type="number" class="cell" value="${pd.e||0}" onchange="setYear('${it.id}',${py},'e',this.value)"></td>
+      <td class="calc">${fmt(pu)}</td>
+      <td><input type="number" class="cell" value="${td.s||0}" onchange="setYear('${it.id}',${y},'s',this.value)"></td>
+      <td><input type="number" class="cell" value="${td.o||0}" onchange="setYear('${it.id}',${y},'o',this.value)"></td>
+      <td><input type="number" class="cell" value="${td.e||0}" onchange="setYear('${it.id}',${y},'e',this.value)"></td>
+      <td class="calc">${fmt(tu)}</td>
+      <td class="sug">${fmt(suggest)}</td>
+      <td><input type="number" class="cell" value="${plan!=null?plan:''}" placeholder="${fmt(suggest)}" onchange="setPlan('${it.id}',${y},this.value)"></td>
+      <td><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
+    </tr>`;
+  });
+  h+='</table>';
+  wrap.innerHTML=h;
+}
+
+function fmt(n){ n=Math.round(n*10)/10; return n.toLocaleString(); }
+function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return; it[f]=v; persist(); render(); }
+function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
+function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
+function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この資材')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
+function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',name:'',unit:'',years:{},plan:{}}); persist(); render(); }
+
+function carryAll(){
+  const y=curYear(), py=y-1;
+  if(!confirm(py+'年の期末在庫を、'+y+'年の期首在庫へ全資材コピーしますか？'))return;
+  materials.forEach(it=>{ const pd=ydOf(it,py), td=ydOf(it,y); td.s=num(pd.e); });
+  persist(); render();
+}
+
+// ===== 発注リスト =====
+function copySuggestAll(){
+  const y=parseInt(document.getElementById('order-year').value)||new Date().getFullYear();
+  const py=y-1;
+  materials.forEach(it=>{
+    const pu=usage(it,py); const td=ydOf(it,y); const have=num(td.s)+num(td.o);
+    const suggest=Math.max(0,pu-have);
+    if(!it.plan)it.plan={}; it.plan[y]=suggest;
+  });
+  persist(); renderOrder(); render();
+}
+function renderOrder(){
+  const y=parseInt(document.getElementById('order-year').value)||new Date().getFullYear();
+  const el=document.getElementById('order-content');
+  const list=materials.filter(it=>planOf(it,y)>0);
+  if(!list.length){ el.innerHTML='<div class="empty">発注予定（1以上）の資材はありません<br>在庫表で「発注予定」を入れるか、上の「目安を一括コピー」を押してください</div>'; return; }
+  const order=[...cats];
+  list.sort((a,b)=>{const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);return (ca<0?99:ca)-(cb<0?99:cb)||(a.name||'').localeCompare(b.name||'');});
+  const groups={}; list.forEach(it=>{ (groups[it.cat||'(未分類)']=groups[it.cat||'(未分類)']||[]).push(it); });
+  let h='';
+  Object.keys(groups).forEach(cat=>{
+    h+=`<div class="order-cat">🏷️ ${cat}</div>`;
+    h+=groups[cat].map(it=>`<div class="order-row"><div>${esc(it.name)||'(名称未設定)'}</div><div class="v">${fmt(planOf(it,y))} ${esc(it.unit)}</div></div>`).join('');
+  });
+  el.innerHTML=h;
+}
+
+// ===== カテゴリ設定 =====
+function renderCatList(){
+  const el=document.getElementById('cat-list');
+  el.innerHTML=cats.map((c,i)=>`<div style="display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
+    <span style="flex:1;font-size:0.85rem;">${esc(c)}</span>
+    <button class="btn" style="padding:5px 9px;" onclick="moveCat(${i},-1)" ${i===0?'disabled':''}>▲</button>
+    <button class="btn" style="padding:5px 9px;" onclick="moveCat(${i},1)" ${i===cats.length-1?'disabled':''}>▼</button>
+    <button class="btn" style="padding:5px 9px;color:#c0392b;border-color:#e0a0a0;" onclick="delCat(${i})">✕</button>
+  </div>`).join('');
+}
+function addCat(){ const el=document.getElementById('new-cat'); const n=el.value.trim(); if(!n)return; if(cats.includes(n)){alert('もうあります');return;} cats.push(n); el.value=''; persist(); renderCatList(); render(); }
+function moveCat(i,d){ const j=i+d; if(j<0||j>=cats.length)return; const t=cats[i];cats[i]=cats[j];cats[j]=t; persist(); renderCatList(); render(); }
+function delCat(i){ if(!confirm('カテゴリ「'+cats[i]+'」を削除しますか？（資材は残ります）'))return; cats.splice(i,1); persist(); renderCatList(); render(); }
+
+function exportJson(){
+  const data=JSON.stringify({materials,cats},null,2);
+  const fname='kajiwara_shizai_'+new Date().toISOString().slice(0,10)+'.json';
+  try{ if(navigator.share){ const f=new File([data],fname,{type:'application/json'}); navigator.share({files:[f],title:'資材データ'}).catch(()=>dl(data,fname)); } else dl(data,fname); }catch(e){ dl(data,fname); }
+}
+function dl(data,fname){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'})); a.download=fname; document.body.appendChild(a); a.click(); setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},100); }
+
+// ===== Firebase 同期 =====
+const SYNC={id:Math.random().toString(36).slice(2),applying:false,ready:false};
+let dataRef=null,lastJSON=null,syncTimer=null;
+function snapshotJSON(){ return JSON.stringify({materials,cats}); }
+function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){el.textContent=t;el.style.background=c;} }
+function persist(){ if(syncTimer)clearTimeout(syncTimer); syncTimer=setTimeout(pushIfChanged,700); }
+function pushIfChanged(){
+  if(!SYNC.ready||SYNC.applying||!dataRef)return;
+  const cur=snapshotJSON(); if(cur===lastJSON)return; lastJSON=cur;
+  setSyncDot('保存中…','#e09020');
+  dataRef.set({materials,cats,writer:SYNC.id,updatedAt:Date.now()})
+    .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
+    .catch(e=>{setSyncDot('保存失敗','#c0392b');console.error(e);lastJSON=null;});
+}
+function applyRemote(d){
+  SYNC.applying=true;
+  materials=d.materials||[];
+  cats=(d.cats&&d.cats.length)?d.cats:DEFAULT_CATS.slice();
+  renderCatList();
+  const active=document.querySelector('.page.active');
+  if(active&&active.id==='page-order') renderOrder(); else render();
+  lastJSON=snapshotJSON();
+  SYNC.applying=false;
+}
+function initFirebase(){
+  if(typeof firebase==='undefined'){setSyncDot('SDK失敗','#c0392b');return;}
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dataRef=firebase.database().ref(FIREBASE_PATH);
+    firebase.database().ref('.info/connected').on('value',s=>{ if(s.val()===true){if(SYNC.ready)setSyncDot('同期済 ✓','#3a8a2a');} else setSyncDot('オフライン','#888'); });
+    dataRef.on('value',snap=>{
+      const d=snap.val();
+      if(!d){ SYNC.ready=true; lastJSON=null; pushIfChanged(); return; }
+      SYNC.ready=true;
+      if(d.writer===SYNC.id){ setSyncDot('同期済 ✓','#3a8a2a'); return; }
+      try{ applyRemote(d); }catch(e){ console.error(e); }
+      setSyncDot('同期済 ✓','#3a8a2a');
+    },err=>{setSyncDot('接続失敗','#c0392b');console.error(err);});
+  }catch(e){setSyncDot('初期化失敗','#c0392b');console.error(e);}
+}
+setInterval(pushIfChanged,2000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden')pushIfChanged(); });
+window.addEventListener('pagehide',pushIfChanged);
+
+init();
+initFirebase();
+</script>
+</body>
+</html>
