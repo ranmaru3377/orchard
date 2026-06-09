@@ -619,6 +619,10 @@ const FIREBASE_CONFIG = {
         <label>最低気温（℃）</label>
         <input type="number" id="temp-min" placeholder="例：22">
       </div>
+      <div class="temp-item">
+        <label>平均気温（℃）</label>
+        <input type="number" id="temp-avg" placeholder="自動" step="0.1">
+      </div>
     </div>
     <div class="weather-extra-row">
       <div class="weather-extra-item">
@@ -635,6 +639,21 @@ const FIREBASE_CONFIG = {
       🌤️ 気象庁（岱明）からこの日の気温等を取得
     </button>
     <div id="jma-status" style="font-size:0.78rem;margin-top:8px;color:#1a6fa3;font-weight:500;min-height:1.1em;"></div>
+
+    <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
+      <div class="temp-row">
+        <div class="temp-item">
+          <label>🌸 満開日（積算温度の起点）</label>
+          <input type="date" id="bloom-date" onchange="onBloomDateChange()">
+        </div>
+        <div class="temp-item">
+          <label>🌡️ 積算温度（℃・満開日から）</label>
+          <input type="text" id="accum-temp" readonly placeholder="自動計算"
+            style="background:#f3f7fa;font-weight:700;color:#1a6fa3;">
+        </div>
+      </div>
+      <div id="accum-note" style="font-size:0.72rem;margin-top:6px;color:var(--text-light);"></div>
+    </div>
   </div>
 
   <div class="card">
@@ -956,6 +975,8 @@ async function syncToSheet(dateStr, rec) {
     weatherNote: rec.weatherNote || '',
     tempMax: rec.tempMax || '',
     tempMin: rec.tempMin || '',
+    tempAvg: rec.tempAvg || '',
+    accumTemp: (function(){ var r=computeAccumTemp(dateStr); return r?r.sum:''; })(),
     precip: rec.precip || '',
     windSpeed: rec.windSpeed || '',
     varieties: (rec.varieties || []).join('・'),
@@ -1157,6 +1178,10 @@ function loadRecordToForm(dateStr) {
       if(!r0 || !r0.tempMax){ fetchJmaForDate(dateStr, true); }
     }
   }catch(e){}
+  // 満開日（その年）と積算温度
+  const bEl=document.getElementById('bloom-date');
+  if(bEl){ bEl.value = getBloomMap()[(dateStr||'').slice(0,4)] || ''; }
+  updateAccumTemp();
   const rec = records[dateStr];
   if(!rec) return;
   // 天気
@@ -1175,6 +1200,8 @@ function loadRecordToForm(dateStr) {
   const wind = document.getElementById('wind-speed');
   if(rec.tempMax !== undefined && rec.tempMax !== '') { tmax.value = rec.tempMax; tmax.classList.toggle('auto-filled', !!rec.jmaImported); }
   if(rec.tempMin !== undefined && rec.tempMin !== '') { tmin.value = rec.tempMin; tmin.classList.toggle('auto-filled', !!rec.jmaImported); }
+  const tavgEl = document.getElementById('temp-avg');
+  if(tavgEl && rec.tempAvg !== undefined && rec.tempAvg !== '') { tavgEl.value = rec.tempAvg; tavgEl.classList.toggle('auto-filled', !!rec.jmaImported); }
   if(rec.precip !== undefined && rec.precip !== '' && prec)   { prec.value = rec.precip; prec.classList.toggle('auto-filled', !!rec.jmaImported); }
   if(rec.windSpeed !== undefined && rec.windSpeed !== '' && wind) { wind.value = rec.windSpeed; wind.classList.toggle('auto-filled', !!rec.jmaImported); }
   const badge = document.getElementById('weather-auto-badge');
@@ -1202,7 +1229,7 @@ function loadRecordToForm(dateStr) {
 
 function clearForm() {
   document.querySelectorAll('.btn-option, .variety-btn, .work-btn').forEach(b => b.classList.remove('selected'));
-  ['temp-max','temp-min','precip','wind-speed'].forEach(id => {
+  ['temp-max','temp-min','temp-avg','precip','wind-speed'].forEach(id => {
     const el = document.getElementById(id);
     if(el){ el.value = ''; el.classList.remove('auto-filled'); }
   });
@@ -1233,6 +1260,8 @@ function saveRecord() {
   const workNote = workNoteEl ? workNoteEl.value.trim() : '';
   const tempMax   = document.getElementById('temp-max').value;
   const tempMin   = document.getElementById('temp-min').value;
+  const tempAvgEl = document.getElementById('temp-avg');
+  const tempAvg   = tempAvgEl ? tempAvgEl.value : '';
   const precipEl  = document.getElementById('precip');
   const windEl    = document.getElementById('wind-speed');
   const precip    = precipEl  ? precipEl.value  : '';
@@ -1244,8 +1273,9 @@ function saveRecord() {
   const workHours   = document.getElementById('work-hours').value;
 
   const existing2 = records[dateStr] || {};
-  records[dateStr] = { ...existing2, weather, weatherNote, tempMax, tempMin, precip, windSpeed, varieties, works, workNote, memo, workerCount, workHours };
+  records[dateStr] = { ...existing2, weather, weatherNote, tempMax, tempMin, tempAvg, precip, windSpeed, varieties, works, workNote, memo, workerCount, workHours };
   saveAll();
+  updateAccumTemp();
   markDiaryDone(dateStr);                    // クラウドに「記入済」の印（20時通知の判定用）
   syncToSheet(dateStr, records[dateStr]); // Googleシートにも送信
 
@@ -1375,10 +1405,64 @@ function jumpToRecord(dateStr) {
 // ========== 気象庁CSV取り込み ==========
 // ========== 気象庁アメダス（岱明 86086）から自動取得 ==========
 const AMEDAS_STATION = '86086'; // 熊本県 岱明
-function fillWeatherFields(tmax,tmin,pr,wmax,imported){
+function fillWeatherFields(tmax,tmin,pr,wmax,imported,tavg){
   const set=(id,v)=>{ const e=document.getElementById(id); if(e){ e.value=(v===''||v==null)?'':v; e.classList.toggle('auto-filled',!!imported); } };
   set('temp-max',tmax); set('temp-min',tmin); set('precip',pr); set('wind-speed',wmax);
+  if(tavg!==undefined) set('temp-avg',tavg);
   const badge=document.getElementById('weather-auto-badge'); if(badge) badge.innerHTML=imported?'<span class="auto-badge">気象庁取込</span>':'';
+}
+
+// ===== 満開日（年ごと）と積算温度 =====
+function getBloomMap(){ try{ return JSON.parse(localStorage.getItem('kajiwara_bloom_dates')||'{}'); }catch(e){ return {}; } }
+function setBloomDate(year, d){ const m=getBloomMap(); if(d) m[year]=d; else delete m[year]; localStorage.setItem('kajiwara_bloom_dates', JSON.stringify(m)); }
+function dayAvg(rec){
+  if(!rec) return null;
+  if(rec.tempAvg!==undefined && rec.tempAvg!=='') return Number(rec.tempAvg);
+  if(rec.tempMax!==undefined && rec.tempMax!=='' && rec.tempMin!==undefined && rec.tempMin!=='')
+    return (Number(rec.tempMax)+Number(rec.tempMin))/2;
+  return null;
+}
+// 満開日〜指定日（含む）の平均気温を積算
+function computeAccumTemp(dateStr){
+  if(!dateStr) return null;
+  const year=dateStr.slice(0,4);
+  const bloom=getBloomMap()[year];
+  if(!bloom || bloom>dateStr) return null;
+  let sum=0, have=0, total=0;
+  const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const d=new Date(bloom+'T00:00:00'), end=new Date(dateStr+'T00:00:00');
+  while(d<=end){
+    total++;
+    const key=fmt(d);
+    const a=dayAvg(records[key]);
+    if(a!=null){ sum+=a; have++; }
+    d.setDate(d.getDate()+1);
+  }
+  return { sum:Math.round(sum*10)/10, have, total, bloom };
+}
+function updateAccumTemp(){
+  const dateStr=document.getElementById('rec-date').value;
+  const out=document.getElementById('accum-temp');
+  const note=document.getElementById('accum-note');
+  if(!out) return;
+  const r=computeAccumTemp(dateStr);
+  if(!r){
+    out.value='';
+    if(note) note.textContent=getBloomMap()[(dateStr||'').slice(0,4)] ? '' : '満開日を入力すると満開日からの積算温度を自動計算します。';
+    return;
+  }
+  out.value=r.sum.toFixed(1)+' ℃';
+  if(note){
+    let t=`満開日 ${r.bloom} から ${r.total}日間 のうち ${r.have}日分の平均気温を積算`;
+    if(r.have<r.total) t+=`（${r.total-r.have}日分はデータ未取得）`;
+    note.textContent=t;
+  }
+}
+function onBloomDateChange(){
+  const dateStr=document.getElementById('rec-date').value;
+  const year=(dateStr||toDateStr(new Date())).slice(0,4);
+  setBloomDate(year, document.getElementById('bloom-date').value);
+  updateAccumTemp();
 }
 async function fetchJmaForDate(dateStr, auto){
   if(!dateStr){ if(!auto) alert('日付を選んでください'); return; }
@@ -1404,17 +1488,19 @@ async function fetchJmaForDate(dateStr, auto){
     return;
   }
   const tmax=Math.max(...temps), tmin=Math.min(...temps);
+  const tavg=Math.round((temps.reduce((a,b)=>a+b,0)/temps.length)*10)/10;
   const wmax=winds.length?Math.max(...winds):'';
   const pr=Math.round(precip*10)/10;
   // 記録に保存
   const ex=records[dateStr]||{};
-  records[dateStr]={...ex, tempMax:String(tmax), tempMin:String(tmin), precip:String(pr), windSpeed:(wmax===''?'':String(wmax)), jmaImported:true };
+  records[dateStr]={...ex, tempMax:String(tmax), tempMin:String(tmin), tempAvg:String(tavg), precip:String(pr), windSpeed:(wmax===''?'':String(wmax)), jmaImported:true };
   saveAll();
   // 表示中の日付なら画面に反映
   if(document.getElementById('rec-date').value===dateStr){
-    fillWeatherFields(String(tmax),String(tmin),String(pr),(wmax===''?'':String(wmax)),true);
+    fillWeatherFields(String(tmax),String(tmin),String(pr),(wmax===''?'':String(wmax)),true,String(tavg));
   }
-  if(status){ status.style.color='#1a6fa3'; status.textContent=`✅ ${dateStr}：最高 ${tmax}℃ ／ 最低 ${tmin}℃ ／ 降水 ${pr}mm ／ 風 ${wmax}m/s（岱明）`; }
+  updateAccumTemp();
+  if(status){ status.style.color='#1a6fa3'; status.textContent=`✅ ${dateStr}：最高 ${tmax}℃ ／ 最低 ${tmin}℃ ／ 平均 ${tavg}℃ ／ 降水 ${pr}mm ／ 風 ${wmax}m/s（岱明）`; }
 }
 
 function importCSV(input) {
