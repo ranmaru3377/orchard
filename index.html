@@ -1964,7 +1964,7 @@ function makeIcon(t, sel) {
 
   const doneCount = TASKS.filter(tk => getTaskSt(t, curYear, tk) === 'done').length;
   const headerTask = document.getElementById('header-task')?.value || '';
-  const displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : t.status;
+  const displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : 'todo';  // 作業未選択時は全て未着手の見た目
   let inner = '', extra = '';
 
   if (displaySt === 'todo') {
@@ -2899,12 +2899,8 @@ updateStats();
 renderLegend();
 initListTaskFilter();
 initHeaderTaskSelect();
-// 前回選んでいた作業を復元
-try {
-  const lastTask = localStorage.getItem('kajiwara_map_lasttask') || '';
-  const sel = document.getElementById('header-task');
-  if (lastTask && [...sel.options].some(o => o.value === lastTask)) { sel.value = lastTask; }
-} catch(e){}
+// 初期は「— 作業を選ぶ —」状態（全マーカーは未着手の見た目）
+try { document.getElementById('header-task').value = ''; } catch(e){}
 updateStats();
 document.getElementById('cur-year-label').textContent = curYear;
 applyAppMode();
