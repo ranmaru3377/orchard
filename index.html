@@ -694,6 +694,8 @@ body { display: flex; flex-direction: column; }
   cursor: pointer; font-size: 12px; min-height: 34px;
 }
 .hbtn:active { background: rgba(255,255,255,0.35); }
+.menu-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:none;color:#333;font-size:13px;font-family:inherit;cursor:pointer;border-radius:7px;}
+.menu-item:active,.menu-item:hover{background:#eef3ea;}
 .pill { padding: 3px 9px; border-radius: 20px; font-size: 11px; border: 1px solid rgba(255,255,255,0.4); display: flex; align-items: center; }
 
 /* 園地タブ */
@@ -932,12 +934,12 @@ const FIREBASE_PATH = "kajiwara_orchard";
 </head>
 <body>
 
-<div id="header">
-  <h1>🍐 梶原果樹園</h1>
+<div id="header" style="position:relative;flex-wrap:nowrap;">
+  <h1 style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;">🍐 梶原果樹園<span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.85;"></span></h1>
   <select id="header-task" onchange="onHeaderTaskChange()" style="
-    font-size:12px; padding:6px 10px; border-radius:8px;
+    font-size:12px; padding:6px 8px; border-radius:8px;
     border:1px solid rgba(255,255,255,0.5);
-    background:#2a7020; color:#fff; cursor:pointer; min-width:110px;
+    background:#2a7020; color:#fff; cursor:pointer; min-width:96px; margin-left:auto;
     -webkit-appearance:none;
   ">
     <option value="" style="background:#2a7020;color:#fff">— 作業を選ぶ —</option>
@@ -947,10 +949,13 @@ const FIREBASE_PATH = "kajiwara_orchard";
   </span>
   <span id="task-pill-wip"  class="pill" style="display:none;background:rgba(255,200,50,0.25)">中 <span id="n-wip">0</span></span>
   <span id="task-pill-done" class="pill" style="display:none;background:rgba(100,220,100,0.25)">済 <span id="n-done">0</span></span>
-  <button class="hbtn" id="btn-compare" onclick="toggleCompare()">📅 年比較</button>
-  <button class="hbtn" id="btn-reset" onclick="resetAllToTodo()" style="background:rgba(255,100,100,0.3)">↺ リセット</button>
-  <button class="hbtn" onclick="saveData()">💾 保存</button>
-  <button class="hbtn" onclick="document.getElementById('loadFile').click()">📂 読込</button>
+  <button class="hbtn" id="hdr-menu-btn" onclick="toggleHdrMenu(event)" style="font-size:16px;line-height:1;padding:4px 9px;">⋯</button>
+  <div id="hdr-menu" style="display:none;position:absolute;top:46px;right:8px;z-index:850;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3);padding:6px;min-width:160px;">
+    <button class="menu-item" id="btn-compare" onclick="toggleCompare();closeHdrMenu()">📅 年比較</button>
+    <button class="menu-item" id="btn-reset" onclick="resetAllToTodo();closeHdrMenu()">↺ 全て未着手に戻す</button>
+    <button class="menu-item" onclick="saveData();closeHdrMenu()">💾 データ保存</button>
+    <button class="menu-item" onclick="document.getElementById('loadFile').click();closeHdrMenu()">📂 データ読込</button>
+  </div>
   <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadData(event)">
 </div>
 
@@ -1398,7 +1403,7 @@ function applyAppMode(){
     show('panel-toggle', false);
     const side=document.getElementById('side'); if(side){ side.classList.remove('open'); side.style.display='none'; }
     show('legend', false);
-    ['header-task','task-pill-todo','task-pill-wip','task-pill-done','btn-compare','btn-reset'].forEach(id=>show(id,false));
+    ['header-task','task-pill-todo','task-pill-wip','task-pill-done','btn-compare','btn-reset','hdr-menu-btn'].forEach(id=>show(id,false));
   }
 }
 // 病害虫
@@ -2232,6 +2237,13 @@ function onHeaderTaskChange() {
   try { localStorage.setItem('kajiwara_map_lasttask', document.getElementById('header-task').value||''); } catch(e){}
   updateStats(); trees.forEach(t => refreshMarker(t.id));
 }
+function updateHdrDate(){
+  const d=new Date(); const w=['日','月','火','水','木','金','土'][d.getDay()];
+  const el=document.getElementById('hdr-date'); if(el) el.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+w+')';
+}
+function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); m.style.display=(m.style.display==='none'||!m.style.display)?'block':'none'; }
+function closeHdrMenu(){ const m=document.getElementById('hdr-menu'); if(m)m.style.display='none'; }
+document.addEventListener('click',function(e){ const m=document.getElementById('hdr-menu'); const b=document.getElementById('hdr-menu-btn'); if(m&&m.style.display==='block'&&!m.contains(e.target)&&e.target!==b){ m.style.display='none'; } });
 function resetAllToTodo() {
   const task = document.getElementById('header-task')?.value || '';
   const scope = task ? `「${task}」` : '全作業';
@@ -2908,6 +2920,7 @@ try {
 } catch(e){}
 updateStats();
 document.getElementById('cur-year-label').textContent = curYear;
+updateHdrDate();
 applyAppMode();
 
 // Cmd/Ctrl+Z
