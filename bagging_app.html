@@ -603,13 +603,19 @@ function renderList(){
     +'<button class="btn-today" onclick="addRows(1)">＋1</button>'
     +'<button class="btn-today" onclick="addRows(5)">＋5</button>'
     +'<button class="btn-today" onclick="addRows(10)">＋10</button>'
+    +'<button class="btn-today" onclick="copyTableTSV()">📤 表をコピー</button>'
+    +'<button class="btn-today" onclick="downloadCSV()">⬇️ CSV</button>'
     +'<button class="btn-today" onclick="togglePaste()" style="margin-left:auto;">📋 貼り付け取込</button>'
     +'</div>';
   // 貼り付け取込エリア
   html+='<div id="paste-box" style="display:none;background:#f6faf2;border:1px solid var(--green-pale);border-radius:10px;padding:11px;margin-bottom:10px;">'
-    +'<div class="note" style="margin-bottom:6px;">Excelやスプレッドシートから、次の<b>列の順番</b>でコピーして貼り付け→「取り込む」：<br><b>日付　品種　袋種　園地　区画　枚数　メモ</b><br>（日付は 2026-05-20 や 5/20 でOK。1行1記録）</div>'
+    +'<div class="note" style="margin-bottom:6px;">Excelやスプレッドシートから、次の<b>列の順番</b>でコピーして貼り付け：<br><b>日付　品種　袋種　園地　区画　枚数　メモ　人数　時間</b><br>（日付は 2026-05-20 や 5/20 でOK。1行1記録。見出し行があってもOK。人数・時間は省略可）</div>'
     +'<textarea id="paste-data" placeholder="例）2026-05-20\t新高\tZS17\t自宅園\t中北\t1500\tA品中心" style="width:100%;min-height:90px;font-size:0.8rem;padding:8px;border:1px solid var(--border);border-radius:8px;font-family:inherit;"></textarea>'
-    +'<button class="btn-save" style="margin-top:8px;padding:11px;" onclick="importPaste()">この内容を取り込む</button>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;">'
+    +'<button class="btn-save" style="flex:1;padding:11px;min-width:130px;" onclick="importPaste(false)">＋ 追加で取り込む</button>'
+    +'<button class="btn-save" style="flex:1;padding:11px;min-width:130px;background:#c75b00;" onclick="importPaste(true)">⟳ 全置換で取り込む</button>'
+    +'</div>'
+    +'<div class="note" style="margin-top:6px;">「全置換」は<b>書き出した表を編集して戻すとき</b>に使います（既存を入れ替え＝重複しません）。</div>'
     +'</div>';
   html+='<div class="note" style="margin-bottom:6px;">表のセルを直接書き換えできます（自動保存）。✕で行削除。</div>';
   if(records.length===0){
@@ -666,32 +672,73 @@ function normalizeDate(s){
   if(m){ const y=new Date().getFullYear(); return `${y}-${String(m[1]).padStart(2,'0')}-${String(m[2]).padStart(2,'0')}`; }
   return null;
 }
-function importPaste(){
+function importPaste(replace){
   const ta=document.getElementById('paste-data');
   const txt=(ta.value||'').trim();
   if(!txt){alert('貼り付けデータがありません');return;}
   const lines=txt.split(/\r?\n/).filter(l=>l.trim());
-  let added=0, skipped=0;
+  const parsed=[]; let skipped=0;
   lines.forEach(line=>{
     const cols=line.split(/\t/).length>1 ? line.split(/\t/) : line.split(/,/);
     const c=cols.map(x=>(x||'').trim());
     const date=normalizeDate(c[0]);
     if(!date){ skipped++; return; }   // ヘッダーや空行はスキップ
     const cnt=parseInt((c[5]||'').replace(/[^\d-]/g,''))||0;
-    // 袋種が候補になければ追加
     if(c[2] && !bagTypes.includes(c[2])) addBagTypeValue(c[2]);
-    records.push({
-      id:Date.now()+Math.floor(Math.random()*1000000),
+    parsed.push({
+      id:Date.now()+Math.floor(Math.random()*1000000)+parsed.length,
       date, variety:c[1]||'', bagType:c[2]||'', field:c[3]||'', block:c[4]||'',
-      count:cnt, workers:'', hours:'', note:c[6]||''
+      count:cnt, note:c[6]||'', workers:c[7]||'', hours:c[8]||''
     });
-    added++;
   });
+  if(replace){
+    if(!parsed.length){ alert('取り込める行がありませんでした'); return; }
+    if(!confirm('⟳ 全置換します。\n現在の'+records.length+'件を、貼り付けた'+parsed.length+'件で入れ替えます。\nよろしいですか？')) return;
+    records=parsed;
+  } else {
+    records=records.concat(parsed);
+  }
   localStorage.setItem(STORAGE_KEY,JSON.stringify(records));
   populateBagSelects();
   ta.value='';
   renderList();
-  alert('✅ '+added+'件を取り込みました'+(skipped?`（${skipped}行は日付なしでスキップ）`:''));
+  alert('✅ '+parsed.length+'件を'+(replace?'全置換で':'追加で')+'取り込みました'+(skipped?`（${skipped}行は日付なし/見出しでスキップ）`:''));
+}
+
+// ===== 書き出し（スプレッドシートへ）=====
+function buildTableRows(){
+  const sorted=[...records].sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  return sorted.map(r=>[r.date||'', r.variety||'', r.bagType||'', r.field||'', r.block||'', (r.count||0), (r.note||'').replace(/[\t\r\n]/g,' '), r.workers||'', r.hours||'']);
+}
+const EXPORT_HEADER=['日付','品種','袋種','園地','区画','枚数','メモ','人数','時間'];
+function copyTableTSV(){
+  if(!records.length){ alert('書き出すデータがありません'); return; }
+  const rows=buildTableRows();
+  const tsv=[EXPORT_HEADER].concat(rows).map(r=>r.join('\t')).join('\n');
+  const done=()=>alert('✅ 表をコピーしました。\nスプレッドシートのセルを選んで貼り付けてください。\n編集後は「📋貼り付け取込 → 全置換」で戻せます。');
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(tsv).then(done).catch(()=>fallbackCopy(tsv,done));
+  } else { fallbackCopy(tsv,done); }
+}
+function fallbackCopy(text,cb){
+  const t=document.createElement('textarea');
+  t.value=text; t.style.position='fixed'; t.style.left='-9999px';
+  document.body.appendChild(t); t.focus(); t.select();
+  try{ document.execCommand('copy'); cb&&cb(); }
+  catch(e){ prompt('コピーできませんでした。下を手動でコピーしてください：', text); }
+  document.body.removeChild(t);
+}
+function downloadCSV(){
+  if(!records.length){ alert('書き出すデータがありません'); return; }
+  const esc=v=>{ v=String(v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; };
+  const rows=buildTableRows();
+  const csv=[EXPORT_HEADER].concat(rows).map(r=>r.map(esc).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8;'}); // BOM付きでExcel文字化け防止
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='袋かけ記録_'+new Date().toISOString().slice(0,10)+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 
 function editCount(id,val){
