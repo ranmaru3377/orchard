@@ -651,6 +651,11 @@ const FIREBASE_CONFIG = {
           style="background:#f3f7fa;font-weight:700;color:#1a6fa3;">
       </div>
       <div id="accum-note" style="font-size:0.72rem;margin-top:6px;color:var(--text-light);"></div>
+      <button type="button" id="bloom-fetch-btn" onclick="fetchSinceBloom()"
+        style="width:100%;margin-top:10px;padding:10px;background:#2e7d32;color:#fff;border:none;border-radius:8px;font-size:0.85rem;font-weight:700;font-family:inherit;cursor:pointer;">
+        🌸 満開日〜表示日の気温をまとめて取得（積算用）
+      </button>
+      <div id="bloom-fetch-status" style="font-size:0.78rem;margin-top:8px;color:#2e7d32;font-weight:500;min-height:1.1em;"></div>
     </div>
   </div>
 
@@ -1456,6 +1461,34 @@ function updateAccumTemp(){
     note.textContent=t;
   }
 }
+// 満開日〜表示日（最大は今日）の各日を気象庁から取得（未取得の日だけ）
+async function fetchSinceBloom(){
+  const st=document.getElementById('bloom-fetch-status');
+  const recDate=document.getElementById('rec-date').value;
+  const year=(recDate||'').slice(0,4);
+  const bloom=getBloomMap()[year];
+  if(!bloom){ if(st){ st.style.color='#c0392b'; st.textContent='⚠️ 先に満開日を入力してください'; } return; }
+  const fmt=(d)=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const today=fmt(new Date());
+  // 終点＝表示日と今日の早い方（未来は取得不可）
+  let endStr=recDate||today; if(endStr>today) endStr=today;
+  if(bloom>endStr){ if(st){ st.style.color='#c0392b'; st.textContent='⚠️ 満開日が表示日より後です'; } return; }
+  // 対象日リスト（未取得の日のみ）
+  const targets=[];
+  const d=new Date(bloom+'T00:00:00'), end=new Date(endStr+'T00:00:00');
+  while(d<=end){ const k=fmt(d); const r=records[k]; if(!r || r.tempAvg===undefined || r.tempAvg==='') targets.push(k); d.setDate(d.getDate()+1); }
+  const btn=document.getElementById('bloom-fetch-btn'); if(btn) btn.disabled=true;
+  if(targets.length===0){ if(st){ st.style.color='#2e7d32'; st.textContent='✅ すべて取得済みです'; } updateAccumTemp(); if(btn) btn.disabled=false; return; }
+  let done=0;
+  for(const ds of targets){
+    if(st){ st.style.color='#2e7d32'; st.textContent=`⏳ 取得中… ${++done}/${targets.length}日（${ds}）`; }
+    try{ await fetchJmaForDate(ds, true); }catch(e){}
+  }
+  updateAccumTemp();
+  const r=computeAccumTemp(recDate);
+  if(st){ st.style.color='#2e7d32'; st.textContent = r ? `✅ 完了：${r.have}/${r.total}日分を積算（積算温度 ${r.sum.toFixed(1)}℃）` : '✅ 取得完了'; }
+  if(btn) btn.disabled=false;
+}
 function onBloomDateChange(){
   const dateStr=document.getElementById('rec-date').value;
   const year=(dateStr||toDateStr(new Date())).slice(0,4);
@@ -1514,6 +1547,7 @@ function importCSV(input) {
       if(count > 0) {
         resultEl.textContent = '✅ ' + count + '日分の気象データを取り込みました！';
         buildYearFilter();
+        if(typeof updateAccumTemp==='function') updateAccumTemp();
       } else {
         resultEl.className = 'import-result error';
         resultEl.textContent = '⚠️ 取り込めるデータが見つかりませんでした。';
@@ -1530,7 +1564,7 @@ function importCSV(input) {
 function parseJmaCSV(text) {
   const lines = text.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   let count = 0;
-  let colYear=-1,colMonth=-1,colDay=-1,colTMax=-1,colTMin=-1,colPrec=-1,colWind=-1;
+  let colYear=-1,colMonth=-1,colDay=-1,colTMax=-1,colTMin=-1,colTAvg=-1,colPrec=-1,colWind=-1;
   let headerParsed = false;
 
   for(let i=0; i<lines.length; i++){
@@ -1551,6 +1585,7 @@ function parseJmaCSV(text) {
         const s=c.trim();
         if((s.includes('最高')&&s.includes('気温'))||(s==='最高')) colTMax=idx;
         if((s.includes('最低')&&s.includes('気温'))||(s==='最低')) colTMin=idx;
+        if((s.includes('平均')&&s.includes('気温'))&&colTAvg===-1) colTAvg=idx;
         if(s.includes('降水量')&&colPrec===-1) colPrec=idx;
         if((s.includes('最大')&&s.includes('風速'))&&colWind===-1) colWind=idx;
       });
@@ -1575,13 +1610,14 @@ function parseJmaCSV(text) {
       const v=cols[idx].trim().replace(/[^\d.\-]/g,'');
       return (v===''||isNaN(parseFloat(v)))?'':v;
     };
-    const tmax=getVal(colTMax), tmin=getVal(colTMin);
+    const tmax=getVal(colTMax), tmin=getVal(colTMin), tavg=getVal(colTAvg);
     const prec=getVal(colPrec), wind=getVal(colWind);
-    if(tmax||tmin||prec||wind){
+    if(tmax||tmin||tavg||prec||wind){
       const ex=records[dateKey]||{};
       records[dateKey]={...ex,
         tempMax:   tmax||ex.tempMax||'',
         tempMin:   tmin||ex.tempMin||'',
+        tempAvg:   tavg||ex.tempAvg||'',
         precip:    prec||ex.precip||'',
         windSpeed: wind||ex.windSpeed||'',
         jmaImported:true
