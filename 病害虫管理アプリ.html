@@ -1028,26 +1028,28 @@ const FIREBASE_PATH = "kajiwara_orchard";
     </div>
   </div>
 
-  <div id="line-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#e0f7fa;border:1.5px solid #00bcd4;border-radius:10px;padding:10px 14px;font-size:12px;color:#006978;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-    <b style="display:block;margin-bottom:4px;">📏 線を描画中</b>
-    地図をタップして点を追加（始点→終点）　点の数: <span id="line-cnt">0</span>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="line-colors"></span></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="line-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:6px;margin-top:8px;">
-      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">↩ 1つ戻す</button>
-      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1.2;min-height:38px;">✅ 確定</button>
-      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">全取消</button>
+  <div id="line-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#e0f7fa;border:1.5px solid #00bcd4;border-radius:10px;padding:6px 9px;font-size:11px;color:#006978;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+      <b style="white-space:nowrap;">📏 配管 点:<span id="line-cnt">0</span></b>
+      <span id="line-colors" style="margin-left:auto;"></span>
+      <span id="line-weights" style="padding-left:5px;"></span>
+    </div>
+    <div class="dbtns" style="display:flex;gap:5px;margin-top:5px;">
+      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">↩ 戻す</button>
+      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1.2;min-height:32px;">✅ 確定</button>
+      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">全取消</button>
     </div>
   </div>
 
-  <div id="line-edit-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#fff3e0;border:1.5px solid #ff9800;border-radius:10px;padding:10px 14px;font-size:12px;color:#9a5a00;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-    <b style="display:block;margin-bottom:4px;">📏 線を編集中</b>
-    オレンジの点をドラッグで移動
-    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="le-colors"></span></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="le-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:8px;margin-top:8px;">
-      <button onclick="delLine()" style="background:#fff5f5;color:#c04040;border:1.5px solid #e08080;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">🗑 削除</button>
-      <button onclick="deselectLine()" style="background:#ff9800;color:#fff;border:1px solid #ff9800;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">完了</button>
+  <div id="line-edit-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#fff3e0;border:1.5px solid #ff9800;border-radius:10px;padding:6px 9px;font-size:11px;color:#9a5a00;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+      <b style="white-space:nowrap;">📏 編集 (点をドラッグ)</b>
+      <span id="le-colors" style="margin-left:auto;"></span>
+      <span id="le-weights" style="padding-left:5px;"></span>
+    </div>
+    <div class="dbtns" style="display:flex;gap:5px;margin-top:5px;">
+      <button onclick="delLine()" style="background:#fff5f5;color:#c04040;border:1.5px solid #e08080;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">🗑 削除</button>
+      <button onclick="deselectLine()" style="background:#ff9800;color:#fff;border:1px solid #ff9800;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">完了</button>
     </div>
   </div>
 
@@ -1578,8 +1580,8 @@ function setTool(t) {
 // 線（ライン）の描画・編集
 // ==============================
 // 色・太さの選択UI
-function swatchHtml(c,active){ return `<span data-c="${c}" style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${c};border:2px solid ${active?'#333':'#bbb'};cursor:pointer;vertical-align:middle;"></span>`; }
-function weightBtnHtml(x,active){ return `<button data-w="${x.w}" style="padding:3px 9px;border-radius:6px;border:1.5px solid ${active?'#00bcd4':'#ccc'};background:${active?'#e0f7fa':'#fff'};font-size:11px;cursor:pointer;font-family:inherit;">${x.l}</button>`; }
+function swatchHtml(c,active){ return `<span data-c="${c}" style="display:inline-block;width:15px;height:15px;border-radius:50%;background:${c};border:2px solid ${active?'#333':'#ccc'};cursor:pointer;vertical-align:middle;margin:1px;"></span>`; }
+function weightBtnHtml(x,active){ return `<button data-w="${x.w}" style="padding:2px 7px;border-radius:5px;border:1.5px solid ${active?'#00bcd4':'#ccc'};background:${active?'#e0f7fa':'#fff'};font-size:10px;cursor:pointer;font-family:inherit;">${x.l}</button>`; }
 function buildDrawPalette(){
   const cc=document.getElementById('line-colors');
   if(cc){ cc.innerHTML=LINE_COLORS.map(c=>swatchHtml(c,c===lineColor)).join(' ');
