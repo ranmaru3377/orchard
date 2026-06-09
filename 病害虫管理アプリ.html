@@ -1030,7 +1030,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
 
   <div id="line-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#e0f7fa;border:1.5px solid #00bcd4;border-radius:10px;padding:6px 9px;font-size:11px;color:#006978;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
     <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
-      <b style="white-space:nowrap;">📏 配管 点:<span id="line-cnt">0</span></b>
+      <b id="line-title" style="white-space:nowrap;">📏 配管 点:<span id="line-cnt">0</span></b>
       <span id="line-colors" style="margin-left:auto;"></span>
       <span id="line-weights" style="padding-left:5px;"></span>
     </div>
@@ -1043,7 +1043,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
 
   <div id="line-edit-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#fff3e0;border:1.5px solid #ff9800;border-radius:10px;padding:6px 9px;font-size:11px;color:#9a5a00;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
     <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
-      <b style="white-space:nowrap;">📏 編集 (点をドラッグ)</b>
+      <b id="line-edit-title" style="white-space:nowrap;">📏 編集 (点をドラッグ)</b>
       <span id="le-colors" style="margin-left:auto;"></span>
       <span id="le-weights" style="padding-left:5px;"></span>
     </div>
@@ -1394,9 +1394,16 @@ function toggleTrees(){
   const b=document.getElementById('btn-trees'); if(b) b.classList.toggle('on', treesVisible);
   document.getElementById('statusbar').textContent = treesVisible ? '🌳 木を表示中' : '🌳 木を非表示中';
 }
+const LINE_LABEL = (APP_MODE==='map') ? '線' : '配管';
+function setSyncDotHidden(h){ const d=document.getElementById('sync-dot'); if(d) d.style.display = h?'none':''; }
 function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
+  // ツール名（マップ＝線／点検＝配管）
+  const setTxt=(id,t)=>{ const e=document.getElementById(id); if(e) e.innerHTML=t; };
+  const bl=document.getElementById('btn-line'); if(bl) bl.title=LINE_LABEL+'を描く';
+  setTxt('line-title','📏 '+LINE_LABEL+' 点:<span id="line-cnt">0</span>');
+  setTxt('line-edit-title','📏 '+LINE_LABEL+'を編集 (点をドラッグ)');
   show('btn-add', m==='map'); show('btn-move', m==='map');
   show('btn-line', m==='map'||m==='facility'); show('btn-facility', m==='facility');
   show('btn-issue', m==='issue');
@@ -1571,7 +1578,7 @@ function setTool(t) {
     t==='add'      ? '地図をタップして木を配置 / ↖で選択に戻す' :
     t==='move'     ? '✋ 移動モード：木をドラッグして移動 / ↖で終了' :
     t==='issue'    ? '🐛 地図をタップして病害虫の発生地点をマーク / ↖で終了' :
-    t==='line'     ? '📏 地図をタップして配管ラインを描く（始点→終点→確定）/ ↖で終了' :
+    t==='line'     ? ('📏 地図をタップして'+LINE_LABEL+'を描く（始点→終点→確定）/ ↖で終了') :
     t==='facility' ? '💧 地図をタップして設備（スプリンクラー等）を配置 / ↖で終了' :
                      'タップで木を選択 ／ 🌳で木を追加';
 }
@@ -1592,7 +1599,7 @@ function buildDrawPalette(){
 }
 function startLineDraw(){
   _cleanLine(); linePts=[];
-  document.getElementById('line-banner').style.display='block';
+  document.getElementById('line-banner').style.display='block'; setSyncDotHidden(true);
   document.getElementById('line-cnt').textContent='0';
   buildDrawPalette();
 }
@@ -1624,7 +1631,7 @@ function _cleanLine(){
   lineMarkers.forEach(m=>{try{map.removeLayer(m);}catch(e){}}); lineMarkers=[];
   if(linePoly){try{map.removeLayer(linePoly);}catch(e){}linePoly=null;}
   linePts=[];
-  const b=document.getElementById('line-banner'); if(b) b.style.display='none';
+  const b=document.getElementById('line-banner'); if(b) b.style.display='none'; setSyncDotHidden(false);
 }
 function drawAllLines(){
   Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={};
@@ -1661,14 +1668,14 @@ function selectLine(id){
     vm.on('dragend',()=>{ map.dragging.enable(); });
     lineVertexMarkers.push(vm);
   });
-  document.getElementById('line-edit-banner').style.display='block';
+  document.getElementById('line-edit-banner').style.display='block'; setSyncDotHidden(true);
 }
 function redrawLine(id){ const ln=lines.find(x=>x.id===id), pl=lpolyLayers[id]; if(ln&&pl) pl.setLatLngs(ln.pts.map(p=>[p.lat,p.lng])); }
 function deselectLine(){
   lineVertexMarkers.forEach(m=>{try{map.removeLayer(m);}catch(e){}}); lineVertexMarkers=[];
   if(selLineId){ const pl=lpolyLayers[selLineId], ln=lines.find(x=>x.id===selLineId); if(pl&&ln) pl.setStyle({color:ln.color||LINE_COLOR,weight:ln.weight||2}); }
   selLineId=null;
-  const b=document.getElementById('line-edit-banner'); if(b) b.style.display='none';
+  const b=document.getElementById('line-edit-banner'); if(b) b.style.display='none'; setSyncDotHidden(false);
 }
 function delLine(){
   if(!selLineId) return;
