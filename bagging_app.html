@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>梶原果樹園 袋かけ入力</title>
@@ -394,7 +398,25 @@ function init(){
   setToday();
   stockToday();
   document.getElementById('sum-year').value=new Date().getFullYear();
-  document.getElementById('rec-date').addEventListener('change',()=>{ updateCum(); updateBagPrevStock(); });
+  document.getElementById('rec-date').addEventListener('change',()=>{ updateCum(); updateBagPrevStock(); markFormDirty(); });
+  // 保存状態トラッキング（入力が変わったら「未保存」に戻す）
+  const pi=document.getElementById('page-input');
+  if(pi){
+    pi.addEventListener('input', markFormDirty);
+    pi.addEventListener('change', markFormDirty);
+    pi.addEventListener('click', e=>{ if(e.target.closest('.opt')) markFormDirty(); });
+  }
+}
+function markFormSaved(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=true; b.textContent='✅ 保存しました（変更すると再保存できます）';
+  b.style.background='#2e7d32'; b.style.opacity='0.9';
+}
+function markFormDirty(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=false; b.style.opacity='';
+  if(editingId){ b.textContent='💾 この内容で更新する'; b.style.background='#1565c0'; }
+  else { b.textContent='💾 保存する'; b.style.background=''; }
 }
 
 function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
@@ -506,11 +528,21 @@ function saveRecord(){
     if(!bag){alert('袋種を入力してください');return;}
     if(addBagTypeValue(bag)){ populateBagSelects(); }
   }
+  const field=document.getElementById('field').value;
+  const block=document.getElementById('block').value;
+  // 重複チェック（新規保存時のみ：同じ日・品種・袋種・園地・区画・枚数の記録があれば確認）
+  if(!editingId){
+    const dup=records.find(r=> r.date===date && r.variety===variety && r.bagType===bag
+      && (r.field||'')===field && (r.block||'')===block && (parseInt(r.count)||0)===count);
+    if(dup){
+      if(!confirm('⚠️ 同じ内容の記録がすでにあります。\n（'+date+'／'+variety+'／'+bag+'／'+count+'枚）\n\n重複して保存しますか？')) return;
+    }
+  }
   const rec={
     id: editingId || Date.now(), date, variety, count,
     bagType:bag,
-    field:document.getElementById('field').value,
-    block:document.getElementById('block').value,
+    field:field,
+    block:block,
     workers:document.getElementById('workers').value,
     hours:document.getElementById('hours').value,
     note:document.getElementById('note').value.trim()
@@ -518,7 +550,6 @@ function saveRecord(){
   if(editingId){
     records=records.map(r=>r.id===editingId?rec:r);
     editingId=null;
-    const btn=document.getElementById('save-btn'); btn.textContent='💾 保存する'; btn.style.background='';
   } else {
     records.push(rec);
     syncOne(rec);
@@ -532,6 +563,7 @@ function saveRecord(){
   document.getElementById('bag-other-wrap').style.display='none';
   if(document.getElementById('bag-type').value==='その他') document.getElementById('bag-type').value=bag;
   updateCum();
+  markFormSaved();
 }
 
 async function syncOne(rec){

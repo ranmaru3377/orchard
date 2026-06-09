@@ -752,7 +752,7 @@ const FIREBASE_CONFIG = {
     <div class="photo-grid" id="photo-grid"></div>
   </div>
 
-  <button class="btn-save" onclick="saveRecord()">💾 この日の記録を保存する</button>
+  <button class="btn-save" id="save-btn" onclick="saveRecord()">💾 この日の記録を保存する</button>
   <div class="save-msg" id="save-msg">✅ 保存しました！</div>
   <div id="sync-status" style="display:none;font-size:0.8rem;text-align:center;margin-top:6px;font-weight:500;"></div>
 </div>
@@ -1168,6 +1168,13 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('rec-date').addEventListener('change', e => loadRecordToForm(e.target.value));
   document.getElementById('worker-count').addEventListener('input', updateManHours);
   document.getElementById('work-hours').addEventListener('input', updateManHours);
+  // 入力が変わったら「未保存」に戻す
+  const pr=document.getElementById('page-record');
+  if(pr){
+    pr.addEventListener('input', markDiaryDirty);
+    pr.addEventListener('change', e=>{ if(e.target.id!=='rec-date') markDiaryDirty(); });
+    pr.addEventListener('click', e=>{ if(e.target.closest('.btn-option,.variety-btn,.work-btn')) markDiaryDirty(); });
+  }
 });
 function loadRecordToForm(dateStr) {
   clearForm();
@@ -1186,6 +1193,8 @@ function loadRecordToForm(dateStr) {
   if(bEl){ bEl.value = getBloomMap()[(dateStr||'').slice(0,4)] || ''; }
   updateAccumTemp();
   const rec = records[dateStr];
+  // この日の保存状態を表示（記録があれば「保存済み」、なければ「未保存」）
+  if(rec && (rec.weather||rec.memo||rec.works||rec.varieties)) markDiarySaved(); else markDiaryDirty();
   if(!rec) return;
   // 天気
   if(rec.weather) {
@@ -1285,6 +1294,19 @@ function saveRecord() {
   const msg = document.getElementById('save-msg');
   msg.classList.add('show');
   setTimeout(() => msg.classList.remove('show'), 2500);
+  markDiarySaved();
+}
+
+// ===== 保存状態の表示（未保存／保存済み） =====
+function markDiarySaved(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=true; b.textContent='✅ 保存しました（変更すると再保存できます）';
+  b.style.background='#2e7d32'; b.style.opacity='0.9';
+}
+function markDiaryDirty(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=false; b.style.opacity='';
+  b.textContent='💾 この日の記録を保存する'; b.style.background='';
 }
 
 // ========== 10年日記 ==========

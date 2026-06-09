@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -103,7 +107,7 @@ input[type=number],input[type=text],input[type=time],select{width:100%;padding:9
   </div>
 
   <div class="card">
-    <div class="card-title">🔧 作業内容（1つ選択）</div>
+    <div class="card-title">🔧 作業内容（複数選択可）</div>
     <div class="btn-group" id="work-btns"></div>
     <div id="work-other-wrap" style="margin-top:8px;display:none;">
       <input type="text" id="work-other" placeholder="作業内容を入力（保存すると候補に追加されます）" style="font-size:0.85rem;">
@@ -204,7 +208,8 @@ const FIELDS=['長洲園','新図園畑','新図園山','自宅園','全園'];
 let records = [];
 let persons = ['自分'];
 let works = DEFAULT_WORKS.slice();
-let selPerson='', selWork='', selField='';
+let selPerson='', selWorks=[], selField='';
+function recWorks(r){ if(Array.isArray(r.works)&&r.works.length) return r.works; if(r.work) return [r.work]; return []; }
 let seg='person';
 let editingId=null;
 
@@ -223,6 +228,13 @@ function init(){
   makeSingle('field-btns', FIELDS, v=>{ selField=v; }, true);
   setToday();
   updateCalc();
+  // 保存状態トラッキング（入力が変わったら「未保存」に戻す）
+  const pi=document.getElementById('page-input');
+  if(pi){
+    pi.addEventListener('input', markFormDirty);
+    pi.addEventListener('change', markFormDirty);
+    pi.addEventListener('click', e=>{ if(e.target.closest('.opt')) markFormDirty(); });
+  }
   // 年セレクト
   const ys=[]; const ty=new Date().getFullYear();
   for(let y=ty+1;y>=ty-5;y--) ys.push(y);
@@ -248,13 +260,22 @@ function makeSingle(id,items,onSelect,toggleable){
   });
 }
 
-// 作業ボタンを描画（選択状態を保持）
+// 作業ボタンを描画（複数選択・選択状態を保持）
 function renderWorkBtns(){
-  makeSingle('work-btns', works, v=>{
-    selWork=v;
-    document.getElementById('work-other-wrap').style.display = (v==='その他')?'block':'none';
+  const c=document.getElementById('work-btns');
+  c.innerHTML='';
+  works.forEach(v=>{
+    const b=document.createElement('button'); b.className='opt'; b.textContent=v;
+    if(selWorks.includes(v)) b.classList.add('selected');
+    b.onclick=()=>{
+      const i=selWorks.indexOf(v);
+      if(i>=0){ selWorks.splice(i,1); b.classList.remove('selected'); }
+      else { selWorks.push(v); b.classList.add('selected'); }
+      document.getElementById('work-other-wrap').style.display = selWorks.includes('その他')?'block':'none';
+    };
+    c.appendChild(b);
   });
-  if(selWork) selectBtnByText('work-btns', selWork);
+  document.getElementById('work-other-wrap').style.display = selWorks.includes('その他')?'block':'none';
   renderWorkManage();
 }
 
@@ -351,29 +372,51 @@ function updateCalc(){
   document.getElementById('calc-hours').textContent=h>0?h.toFixed(1)+' 時間':'—';
 }
 
+function markFormSaved(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=true; b.textContent='✅ 保存しました（変更すると再保存できます）';
+  b.style.background='#2e7d32'; b.style.opacity='0.9';
+}
+function markFormDirty(){
+  const b=document.getElementById('save-btn'); if(!b)return;
+  b.disabled=false; b.style.opacity='';
+  if(editingId){ b.textContent='💾 この内容で更新する'; b.style.background='#1565c0'; }
+  else { b.textContent='💾 保存する'; b.style.background=''; }
+}
 function saveRecord(){
   const date=document.getElementById('rec-date').value;
   if(!date){alert('日付を選んでください');return;}
   if(!selPerson){alert('だれが作業したか選んでください');return;}
-  let work=selWork;
-  if(!work){alert('作業内容を選んでください');return;}
-  if(work==='その他'){
-    const o=document.getElementById('work-other').value.trim(); work=o||'その他';
-    if(work!=='その他' && addWorkValue(work)){ renderWorkBtns(); }  // 自由入力を候補に追加
+  let worksSel=selWorks.slice();
+  if(!worksSel.length){alert('作業内容を選んでください');return;}
+  if(worksSel.includes('その他')){
+    const o=document.getElementById('work-other').value.trim();
+    if(o){ worksSel=worksSel.map(w=>w==='その他'?o:w); if(addWorkValue(o)){ renderWorkBtns(); } }
   }
   const h=calcHours();
   if(h<=0){alert('勤務時間を正しく入力してください');return;}
-  const rec={ id: editingId || (Date.now()+Math.floor(Math.random()*1000)), date, person:selPerson, work,
-    field:selField, start:document.getElementById('start').value, end:document.getElementById('end').value,
+  const start=document.getElementById('start').value, end=document.getElementById('end').value;
+  // 重複チェック（新規保存時のみ：同じ日・人・作業・時間の記録があれば確認）
+  if(!editingId){
+    const dup=records.find(r=> r.date===date && r.person===selPerson
+      && r.start===start && r.end===end
+      && recWorks(r).slice().sort().join('|')===worksSel.slice().sort().join('|'));
+    if(dup){
+      if(!confirm('⚠️ 同じ内容の記録がすでにあります。\n（'+date+'／'+selPerson+'／'+worksSel.join('・')+'／'+start+'〜'+end+'）\n\n重複して保存しますか？')) return;
+    }
+  }
+  const rec={ id: editingId || (Date.now()+Math.floor(Math.random()*1000)), date, person:selPerson,
+    works:worksSel, work:worksSel.join('・'),
+    field:selField, start:start, end:end,
     breakMin:document.getElementById('break').value, hours:+h.toFixed(2),
     note:document.getElementById('note').value.trim() };
-  if(editingId){ records=records.map(r=>r.id===editingId?rec:r); editingId=null;
-    const btn=document.getElementById('save-btn'); btn.textContent='💾 保存する'; btn.style.background='';
-  } else { records.push(rec); }
+  if(editingId){ records=records.map(r=>r.id===editingId?rec:r); editingId=null; }
+  else { records.push(rec); }
   scheduleSync();
   const m=document.getElementById('save-msg');m.classList.add('show');setTimeout(()=>m.classList.remove('show'),2000);
   // 連続入力しやすく：人と作業は残す、備考クリア
   document.getElementById('note').value='';
+  markFormSaved();
 }
 
 function delRec(id){
@@ -394,7 +437,7 @@ function editRec(id){
   editingId=id;
   document.getElementById('rec-date').value=r.date;
   selPerson=r.person; renderPersonBtns();
-  selWork=r.work; selectBtnByText('work-btns', r.work);
+  selWorks=recWorks(r).slice(); renderWorkBtns();
   selField=r.field||''; selectBtnByText('field-btns', r.field||'');
   document.getElementById('start').value=r.start||'08:00';
   document.getElementById('end').value=r.end||'17:00';
@@ -426,7 +469,7 @@ function renderList(){
   rows.sort((a,b)=>b.date.localeCompare(a.date)||b.id-a.id);
   el.innerHTML=rows.map(r=>{
     const[y,m,d]=r.date.split('-');
-    let chips=`<span class="chip person">🧑${r.person}</span><span class="chip">🔧${r.work}</span>`;
+    let chips=`<span class="chip person">🧑${r.person}</span>`+recWorks(r).map(w=>`<span class="chip">🔧${w}</span>`).join('');
     if(r.field)chips+=`<span class="chip">📍${r.field}</span>`;
     chips+=`<span class="chip">${r.start||''}〜${r.end||''}</span>`;
     return`<div class="list-item">
@@ -474,7 +517,8 @@ function renderByPerson(el,rows){
     if(!map[r.person])map[r.person]={hours:0,days:new Set(),topWork:{}};
     map[r.person].hours+=r.hours;
     map[r.person].days.add(r.date);
-    map[r.person].topWork[r.work]=(map[r.person].topWork[r.work]||0)+r.hours;
+    const ws=recWorks(r); const share=ws.length?r.hours/ws.length:r.hours;
+    ws.forEach(w=>{ map[r.person].topWork[w]=(map[r.person].topWork[w]||0)+share; });
   });
   const arr=Object.entries(map).map(([name,d])=>({name,hours:d.hours,days:d.days.size,
     top:Object.entries(d.topWork).sort((a,b)=>b[1]-a[1])[0]}));
@@ -500,8 +544,8 @@ function renderByWork(el,rows){
   if(!rows.length){el.innerHTML='<div class="empty">この対象者の記録はありません</div>';return;}
   const map={};
   rows.forEach(r=>{
-    if(!map[r.work])map[r.work]={hours:0,count:0};
-    map[r.work].hours+=r.hours; map[r.work].count++;
+    const ws=recWorks(r); const share=ws.length?r.hours/ws.length:r.hours;
+    ws.forEach(w=>{ if(!map[w])map[w]={hours:0,count:0}; map[w].hours+=share; map[w].count++; });
   });
   const arr=Object.entries(map).map(([work,d])=>({work,hours:d.hours,count:d.count}));
   arr.sort((a,b)=>b.hours-a.hours);
