@@ -641,16 +641,14 @@ const FIREBASE_CONFIG = {
     <div id="jma-status" style="font-size:0.78rem;margin-top:8px;color:#1a6fa3;font-weight:500;min-height:1.1em;"></div>
 
     <div style="margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
-      <div class="temp-row">
-        <div class="temp-item">
-          <label>🌸 満開日（積算温度の起点）</label>
-          <input type="date" id="bloom-date" onchange="onBloomDateChange()">
-        </div>
-        <div class="temp-item">
-          <label>🌡️ 積算温度（℃・満開日から）</label>
-          <input type="text" id="accum-temp" readonly placeholder="自動計算"
-            style="background:#f3f7fa;font-weight:700;color:#1a6fa3;">
-        </div>
+      <div class="temp-item" style="margin-bottom:10px;">
+        <label>🌸 満開日（積算温度の起点）</label>
+        <input type="date" id="bloom-date" onchange="onBloomDateChange()">
+      </div>
+      <div class="temp-item">
+        <label>🌡️ 積算温度（満開日からの平均気温の合計）</label>
+        <input type="text" id="accum-temp" readonly placeholder="満開日を入力すると自動計算"
+          style="background:#f3f7fa;font-weight:700;color:#1a6fa3;">
       </div>
       <div id="accum-note" style="font-size:0.72rem;margin-top:6px;color:var(--text-light);"></div>
     </div>
