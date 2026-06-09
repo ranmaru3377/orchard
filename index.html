@@ -1390,7 +1390,7 @@ function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
   show('btn-add', m==='map'); show('btn-move', m==='map');
-  show('btn-line', m==='facility'); show('btn-facility', m==='facility');
+  show('btn-line', m==='map'||m==='facility'); show('btn-facility', m==='facility');
   show('btn-issue', m==='issue');
   show('btn-trees', m!=='map');   // 病害虫・点検アプリで 木の表示切替を表示
   if(m!=='map'){
@@ -1612,7 +1612,7 @@ function _cleanLine(){
 }
 function drawAllLines(){
   Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={};
-  if(APP_MODE!=='facility') return;   // 配管はスプリンクラー点検アプリのみ表示
+  if(APP_MODE==='issue') return;   // 病害虫アプリでは線は非表示（園地マップ・点検で表示）
   lines.filter(ln=>ln.oid===curOid).forEach(ln=>{
     if(!ln.pts || ln.pts.length<2) return;
     const pl=L.polyline(ln.pts.map(p=>[p.lat,p.lng]),{color:ln.color||LINE_COLOR,weight:ln.weight||2}).addTo(map);
