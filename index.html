@@ -1028,9 +1028,10 @@ const FIREBASE_PATH = "kajiwara_orchard";
     地図をタップして点を追加（始点→終点）　点の数: <span id="line-cnt">0</span>
     <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="line-colors"></span></div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="line-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:8px;margin-top:8px;">
-      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">✅ 確定</button>
-      <button onclick="cancelLine()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">取消</button>
+    <div class="dbtns" style="display:flex;gap:6px;margin-top:8px;">
+      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">↩ 1つ戻す</button>
+      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1.2;min-height:38px;">✅ 確定</button>
+      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">全取消</button>
     </div>
   </div>
 
@@ -1596,6 +1597,14 @@ function addLinePt(lat,lng){
   if(linePts.length>=2) linePoly=L.polyline(linePts.map(p=>[p.lat,p.lng]),{color:lineColor,weight:lineWeight}).addTo(map);
   document.getElementById('line-cnt').textContent=linePts.length;
 }
+function removeLastLinePt(){
+  if(!linePts.length){ return; }
+  linePts.pop();
+  const m=lineMarkers.pop(); if(m){ try{ map.removeLayer(m); }catch(e){} }
+  if(linePoly){ try{ map.removeLayer(linePoly); }catch(e){} linePoly=null; }
+  if(linePts.length>=2){ linePoly=L.polyline(linePts.map(p=>[p.lat,p.lng]),{color:lineColor,weight:lineWeight}).addTo(map); }
+  document.getElementById('line-cnt').textContent=linePts.length;
+}
 function confirmLine(){
   if(linePts.length<2){ alert('点を2つ以上タップしてください'); return; }
   pushUndo();
@@ -2001,8 +2010,12 @@ function addMarker(t) {
   const m = L.marker([t.lat,t.lng], {icon:makeIcon(t,false), draggable:true, zIndexOffset:100});
 
   m.on('click', () => {
-    if (APP_MODE !== 'map') return;  // 病害虫・点検アプリでは木は参照表示のみ
+    // 描画・配置ツール中は、木の上をタップしてもその操作を行う（木の位置で）
+    if (tool === 'line')     { addLinePt(t.lat, t.lng); return; }
+    if (tool === 'issue')    { placeIssue(t.lat, t.lng); return; }
+    if (tool === 'facility') { placeFacility(t.lat, t.lng); return; }
     if (tool === 'move') return;   // 移動モード中はステータスを変えない
+    if (APP_MODE !== 'map') return;  // 病害虫・点検アプリでは木は参照表示のみ
     setTool('select');
     const task = document.getElementById('header-task')?.value || '';
     if (task) {

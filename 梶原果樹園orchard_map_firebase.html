@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -982,6 +986,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
     <div class="tbtn" id="btn-issue" title="病害虫マーク" onclick="setTool('issue')" style="font-size:17px">🐛</div>
     <div class="tbtn" id="btn-line" title="配管ラインを描く" onclick="setTool('line')" style="font-size:17px">📏</div>
     <div class="tbtn" id="btn-facility" title="スプリンクラー・排水口・要修理" onclick="setTool('facility')" style="font-size:17px">💧</div>
+    <div class="tbtn on" id="btn-trees" title="木の表示／非表示" onclick="toggleTrees()" style="font-size:16px;display:none">🌳</div>
     <div class="tbtn" title="全体表示" onclick="fitAll()">⊡</div>
     <div class="tbtn" id="btn-gps" title="現在地" onclick="toggleGps()" style="font-size:18px">📍</div>
     <div class="tbtn" id="btn-compass" title="方位（向き）" onclick="toggleHeading()" style="font-size:18px">🧭</div>
@@ -1023,9 +1028,10 @@ const FIREBASE_PATH = "kajiwara_orchard";
     地図をタップして点を追加（始点→終点）　点の数: <span id="line-cnt">0</span>
     <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="line-colors"></span></div>
     <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="line-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:8px;margin-top:8px;">
-      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">✅ 確定</button>
-      <button onclick="cancelLine()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">取消</button>
+    <div class="dbtns" style="display:flex;gap:6px;margin-top:8px;">
+      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">↩ 1つ戻す</button>
+      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1.2;min-height:38px;">✅ 確定</button>
+      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">全取消</button>
     </div>
   </div>
 
@@ -1371,12 +1377,23 @@ let selZColor = ZCOLS[0];
 let panelOpen = false;
 // アプリのモード： map（園地マップ）/ issue（病害虫）/ facility（スプリンクラー点検）
 const APP_MODE = "map";
+let treesVisible = true;
+function applyTreesVisibility(){
+  Object.values(markerMap).forEach(m=>{ try{ treesVisible ? m.addTo(map) : map.removeLayer(m); }catch(e){} });
+}
+function toggleTrees(){
+  treesVisible = !treesVisible;
+  applyTreesVisibility();
+  const b=document.getElementById('btn-trees'); if(b) b.classList.toggle('on', treesVisible);
+  document.getElementById('statusbar').textContent = treesVisible ? '🌳 木を表示中' : '🌳 木を非表示中';
+}
 function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
   show('btn-add', m==='map'); show('btn-move', m==='map');
-  show('btn-line', m==='facility'); show('btn-facility', m==='facility');
+  show('btn-line', m==='map'||m==='facility'); show('btn-facility', m==='facility');
   show('btn-issue', m==='issue');
+  show('btn-trees', m!=='map');   // 病害虫・点検アプリで 木の表示切替を表示
   if(m!=='map'){
     show('panel-toggle', false);
     const side=document.getElementById('side'); if(side){ side.classList.remove('open'); side.style.display='none'; }
@@ -1440,6 +1457,7 @@ function undo() {
   Object.values(lpolyLayers).forEach(l => { try { map.removeLayer(l); } catch(e){} }); lpolyLayers = {}; deselectLine();
   Object.values(facMap).forEach(m => { try { map.removeLayer(m); } catch(e){} }); facMap = {};
   trees.forEach(t => addMarker(t));
+  applyTreesVisibility();
   drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities(); deselect();
   renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
@@ -1579,6 +1597,14 @@ function addLinePt(lat,lng){
   if(linePts.length>=2) linePoly=L.polyline(linePts.map(p=>[p.lat,p.lng]),{color:lineColor,weight:lineWeight}).addTo(map);
   document.getElementById('line-cnt').textContent=linePts.length;
 }
+function removeLastLinePt(){
+  if(!linePts.length){ return; }
+  linePts.pop();
+  const m=lineMarkers.pop(); if(m){ try{ map.removeLayer(m); }catch(e){} }
+  if(linePoly){ try{ map.removeLayer(linePoly); }catch(e){} linePoly=null; }
+  if(linePts.length>=2){ linePoly=L.polyline(linePts.map(p=>[p.lat,p.lng]),{color:lineColor,weight:lineWeight}).addTo(map); }
+  document.getElementById('line-cnt').textContent=linePts.length;
+}
 function confirmLine(){
   if(linePts.length<2){ alert('点を2つ以上タップしてください'); return; }
   pushUndo();
@@ -1595,7 +1621,7 @@ function _cleanLine(){
 }
 function drawAllLines(){
   Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={};
-  if(APP_MODE!=='facility') return;   // 配管はスプリンクラー点検アプリのみ表示
+  if(APP_MODE==='issue') return;   // 病害虫アプリでは線は非表示（園地マップ・点検で表示）
   lines.filter(ln=>ln.oid===curOid).forEach(ln=>{
     if(!ln.pts || ln.pts.length<2) return;
     const pl=L.polyline(ln.pts.map(p=>[p.lat,p.lng]),{color:ln.color||LINE_COLOR,weight:ln.weight||2}).addTo(map);
@@ -1984,8 +2010,12 @@ function addMarker(t) {
   const m = L.marker([t.lat,t.lng], {icon:makeIcon(t,false), draggable:true, zIndexOffset:100});
 
   m.on('click', () => {
-    if (APP_MODE !== 'map') return;  // 病害虫・点検アプリでは木は参照表示のみ
+    // 描画・配置ツール中は、木の上をタップしてもその操作を行う（木の位置で）
+    if (tool === 'line')     { addLinePt(t.lat, t.lng); return; }
+    if (tool === 'issue')    { placeIssue(t.lat, t.lng); return; }
+    if (tool === 'facility') { placeFacility(t.lat, t.lng); return; }
     if (tool === 'move') return;   // 移動モード中はステータスを変えない
+    if (APP_MODE !== 'map') return;  // 病害虫・点検アプリでは木は参照表示のみ
     setTool('select');
     const task = document.getElementById('header-task')?.value || '';
     if (task) {
@@ -2824,6 +2854,7 @@ function loadData(e) {
       Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={}; deselectLine();
       Object.values(facMap).forEach(m=>{try{map.removeLayer(m);}catch(e){}}); facMap={};
       trees.forEach(t=>addMarker(t));
+      applyTreesVisibility();
       orchards.forEach(o=>{ if(o.polygon?.length>=3){ opolyLayers[o.id]=L.polygon(o.polygon.map(p=>[p.lat,p.lng]),{color:o.color,weight:2.5,fillOpacity:0.06}).addTo(map); } });
       drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities();
       renderOrchardBar(); renderZoneSelect(); renderZones();
@@ -3015,6 +3046,7 @@ function rebuildFromData(d){
   drawAllZones(); drawAllIssues(); drawAllLines(); drawAllFacilities(); renderOrchardBar(); renderZoneSelect(); renderZones();
   updateStats(); renderList(); renderLegend();
   if(selId && trees.find(t=>t.id===selId)) selectTree(selId); else deselect();
+  applyTreesVisibility();
   fitToHome();   // 初回のみ自宅園へ寄せる
 }
 
