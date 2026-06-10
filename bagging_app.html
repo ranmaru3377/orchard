@@ -8,6 +8,20 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>梶原果樹園 袋かけ入力</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+const FIREBASE_PATH = "kajiwara_bagging";
+</script>
 <style>
 :root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -68,8 +82,8 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
 </head>
 <body>
 <header>
-  <h1>🛍️ 梶原果樹園 袋かけ入力</h1>
-  <div class="sub">荒尾市 ― 現場入力用</div>
+  <h1>🛍️ 梶原果樹園 袋かけ入力 <span id="sync-dot" style="font-size:0.62rem;padding:3px 9px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;vertical-align:middle;">接続中…</span></h1>
+  <div class="sub">荒尾市 ― 現場入力用（家族で共有）</div>
 </header>
 
 <div class="tabs">
@@ -252,8 +266,13 @@ input[type=number],input[type=text],select{width:100%;padding:9px 10px;border:1.
     <div id="summary-content"></div>
   </div>
   <div class="card">
+    <div class="card-title">☁️ 家族で共有（クラウド同期）</div>
+    <div class="note" style="margin-bottom:10px;">入力したデータは自動でクラウド保存され、家族の端末・PC・iPhoneすべてで同じ最新データが見られます。<br><b>この端末のデータを「基準」にしたいとき</b>だけ、下のボタンを押してクラウドへ上書きしてください（最初の1回だけでOK）。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;background:#c75b00;" onclick="forceUploadLocal()">📥 この端末のデータを基準にする（クラウドへ上書き）</button>
+  </div>
+  <div class="card">
     <div class="card-title">☁️ Googleスプレッドシート送信</div>
-    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
+    <div class="note" style="margin-bottom:10px;">控えとしてGoogleスプレッドシートにも送信できます（任意）。</div>
     <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
     <div class="sync-status" id="sync-status2"></div>
   </div>
@@ -842,7 +861,69 @@ function crossTableHtml(filtered){
   return h;
 }
 
+// ===== Firebase 家族共有 同期 =====
+const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false, cloudInit:false };
+let dataRef=null, lastJSON=null, syncTimer=null;
+function snapshotJSON(){ return JSON.stringify({records, stockRecords, bagTypes}); }
+function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){ el.textContent=t; el.style.background=c; } }
+function saveAllLocal(){ localStorage.setItem(STORAGE_KEY,JSON.stringify(records)); localStorage.setItem(STOCK_KEY,JSON.stringify(stockRecords)); localStorage.setItem(BAG_KEY,JSON.stringify(bagTypes)); }
+function scheduleSync(){ if(syncTimer)clearTimeout(syncTimer); syncTimer=setTimeout(pushIfChanged,600); }
+function pushIfChanged(){
+  if(!SYNC.ready||SYNC.applying||!dataRef||!SYNC.cloudInit)return;  // クラウド未初期化のうちは自動送信しない（誤上書き防止）
+  const cur=snapshotJSON(); if(cur===lastJSON)return; lastJSON=cur;
+  setSyncDot('保存中…','#e09020');
+  dataRef.set({records, stockRecords, bagTypes, writer:SYNC.id, updatedAt:Date.now()})
+    .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
+    .catch(e=>{ setSyncDot('保存失敗','#c0392b'); console.error(e); lastJSON=null; });
+}
+function applyRemote(d){
+  SYNC.applying=true;
+  records=Array.isArray(d.records)?d.records:[];
+  stockRecords=Array.isArray(d.stockRecords)?d.stockRecords:[];
+  if(Array.isArray(d.bagTypes)&&d.bagTypes.length){ bagTypes=d.bagTypes.slice(); if(!bagTypes.includes('その他')) bagTypes.push('その他'); }
+  saveAllLocal();
+  if(typeof populateBagSelects==='function') populateBagSelects();
+  const active=document.querySelector('.page.active');
+  if(active){
+    if(active.id==='page-list') renderList();
+    else if(active.id==='page-stock'){ renderStockLatest(); renderStockHistory(); }
+    else if(active.id==='page-summary') renderSummary();
+    else { updateCum(); updateBagPrevStock(); }
+  }
+  lastJSON=snapshotJSON();
+  SYNC.applying=false;
+}
+// この端末のデータを「基準」としてクラウドへ上書き（iPhoneの最新データを正にするとき用）
+function forceUploadLocal(){
+  if(!dataRef){ alert('まだ接続中です。数秒待って再度お試しください'); return; }
+  if(!confirm('この端末のデータを「基準」としてクラウドに上書きします。\n（クラウド上の他のデータは置き換わります）\n\nよろしいですか？')) return;
+  SYNC.ready=true; SYNC.cloudInit=true; lastJSON=null;
+  dataRef.set({records, stockRecords, bagTypes, writer:SYNC.id, updatedAt:Date.now()})
+    .then(()=>{ lastJSON=snapshotJSON(); setSyncDot('同期済 ✓','#3a8a2a'); alert('✅ この端末のデータをクラウドに反映しました。\n以降は全端末で自動共有されます。'); })
+    .catch(e=>{ alert('送信に失敗しました'); console.error(e); });
+}
+function initFirebase(){
+  if(typeof firebase==='undefined'){ setSyncDot('SDK失敗','#c0392b'); return; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dataRef=firebase.database().ref(FIREBASE_PATH);
+    firebase.database().ref('.info/connected').on('value',s=>{ if(s.val()===true){ if(SYNC.ready) setSyncDot('同期済 ✓','#3a8a2a'); } else setSyncDot('オフライン','#888'); });
+    dataRef.on('value',snap=>{
+      const d=snap.val();
+      if(!d){ SYNC.ready=true; SYNC.cloudInit=false; setSyncDot('未共有','#b0883a'); return; }  // クラウド未作成：誤上書きを避けるため自動送信しない
+      SYNC.ready=true; SYNC.cloudInit=true;
+      if(d.writer===SYNC.id){ setSyncDot('同期済 ✓','#3a8a2a'); return; }
+      try{ applyRemote(d); }catch(e){ console.error(e); }
+      setSyncDot('同期済 ✓','#3a8a2a');
+    }, err=>{ setSyncDot('接続失敗','#c0392b'); console.error(err); });
+  }catch(e){ setSyncDot('初期化失敗','#c0392b'); console.error(e); }
+}
+setInterval(pushIfChanged,2000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pushIfChanged(); });
+window.addEventListener('pagehide',pushIfChanged);
+
 init();
+initFirebase();
 </script>
 </body>
 </html>
