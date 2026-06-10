@@ -1202,6 +1202,12 @@ const FIREBASE_PATH = "kajiwara_orchard";
           <input type="number" id="ei-plantyear" min="1900" max="2100" placeholder="例：2020" oninput="autoSave()">
           <div id="ei-age-calc" style="font-size:12px;color:#3a8a2a;font-weight:600;margin-top:5px"></div>
         </div>
+        <div class="frow"><div class="flabel">区分</div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="ei-shrink" onchange="autoSave()" style="width:18px;height:18px;">
+            ▲ 縮伐木にする（三角アイコン）
+          </label>
+        </div>
         <div class="frow"><div class="flabel">メモ</div><textarea id="ei-memo" oninput="autoSave()"></textarea></div>
         <button class="gbtn red" onclick="delTree()">🗑 この木を削除</button>
       </div>
@@ -1947,13 +1953,20 @@ function ageCategory(age) {
   if (age <= 50) return { label:'成木', factor:1.05 };
   return { label:'老木', factor:1.3 };
 }
+// 木の区分（縮伐木は手動指定・三角形アイコン）
+function treeCat(t) {
+  if (t && t.shrink) return { label:'縮伐木', factor:0.8, shape:'tri' };
+  const info = ageCategory(treeAgeAt(t, curYear));
+  return { label:info.label, factor:info.factor, shape:'circle' };
+}
 
 function makeIcon(t, sel) {
   const zoom = map.getZoom();
   const base = zoom >= 21 ? 34 : zoom >= 20 ? 26 : zoom >= 19 ? 18 : zoom >= 18 ? 12 : 10;
-  // 樹齢区分で大きさを変える
-  const ageInfo = ageCategory(treeAgeAt(t, curYear));
-  const sz = Math.max(8, Math.round((sel ? base + 6 : base) * ageInfo.factor));
+  // 区分で大きさ・形を変える（縮伐木は三角形）
+  const cat = treeCat(t);
+  const isTri = cat.shape === 'tri';
+  const sz = Math.max(8, Math.round((sel ? base + 6 : base) * cat.factor));
   const lbl = (t.variety||'').substring(0,2);
   const fsize = Math.max(7, Math.round(sz * 0.35));
   let col = treeColor(t);
@@ -2010,9 +2023,24 @@ function makeIcon(t, sel) {
     ? `<div style="position:absolute;top:${sz+4}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;pointer-events:none">${t.variety||''}</div>`
     : '';
 
+  let html;
+  if (isTri) {
+    // 縮伐木：三角形。枠線はドロップシャドウで表現（clip-pathでbox-shadowは消えるため）
+    let filterCss = '';
+    if (displaySt === 'wip')  filterCss = 'filter:drop-shadow(0 0 1px #f0c000) drop-shadow(0 0 2px #f0c000cc);';
+    else if (displaySt === 'done') filterCss = 'filter:drop-shadow(0 0 1px #2a7ab0) drop-shadow(0 0 2px #2a7ab0cc);';
+    if (sel) filterCss = 'filter:drop-shadow(0 0 3px rgba(80,220,80,0.95)) drop-shadow(0 0 5px rgba(80,220,80,0.7));';
+    if (t.id === gpsNearestId) filterCss = 'filter:drop-shadow(0 0 4px #ff5a00) drop-shadow(0 0 8px rgba(255,90,0,0.9));';
+    html = `<div style="position:relative;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;">`
+      + `<div style="position:absolute;inset:0;background:${col};clip-path:polygon(50% 3%,97% 96%,3% 96%);${filterCss}"></div>`
+      + `<div style="position:relative;margin-top:${Math.round(sz*0.12)}px;display:flex;align-items:center;justify-content:center;">${inner}</div>`
+      + `${progressBar}${nameTag}</div>`;
+  } else {
+    html = `<div style="position:relative;width:${sz}px;height:${sz}px;border-radius:50%;background:${col};${extra}display:flex;align-items:center;justify-content:center;">${inner}${progressBar}${nameTag}</div>`;
+  }
   return L.divIcon({
     className:'',
-    html:`<div style="position:relative;width:${sz}px;height:${sz}px;border-radius:50%;background:${col};${extra}display:flex;align-items:center;justify-content:center;">${inner}${progressBar}${nameTag}</div>`,
+    html: html,
     iconSize:[sz+40, sz+20],
     iconAnchor:[sz/2, sz/2]
   });
@@ -2107,11 +2135,12 @@ function treeAgeAt(t, year) {
 function updateAgeCalc(t) {
   const el = document.getElementById('ei-age-calc'); if (!el) return;
   const a = treeAgeAt(t, curYear);
+  const shrinkNote = t.shrink ? '　▲縮伐木' : '';
   if (a != null && !isNaN(a)) {
     const cat = ageCategory(a).label;
-    el.textContent = `→ ${curYear}年時点の樹齢：約${a}年目（${cat}）`;
+    el.textContent = `→ ${curYear}年時点の樹齢：約${a}年目（${cat}）${shrinkNote}`;
   } else {
-    el.textContent = '植付年を入力すると樹齢を自動計算します';
+    el.textContent = t.shrink ? '▲ 縮伐木（三角アイコン）' : '植付年を入力すると樹齢を自動計算します';
   }
 }
 
@@ -2177,6 +2206,7 @@ function selectTree(id) {
   setBadge(t.status);
   document.getElementById('ei-variety').value = t.variety||'新高';
   document.getElementById('ei-plantyear').value = t.plantYear || (t.age ? (new Date().getFullYear() - Number(t.age)) : '');
+  document.getElementById('ei-shrink').checked = !!t.shrink;
   updateAgeCalc(t);
   document.getElementById('ei-memo').value = t.memo||'';
   refreshCurrentTaskUI(t);
@@ -2223,6 +2253,7 @@ function autoSave() {
   t.variety = document.getElementById('ei-variety').value;
   const py = document.getElementById('ei-plantyear').value;
   t.plantYear = py ? Number(py) : null;
+  t.shrink  = document.getElementById('ei-shrink').checked;
   t.memo    = document.getElementById('ei-memo').value;
   updateAgeCalc(t);
   refreshMarker(selId); renderList(); renderLegend();

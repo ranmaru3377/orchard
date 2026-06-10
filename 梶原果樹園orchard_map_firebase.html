@@ -694,6 +694,8 @@ body { display: flex; flex-direction: column; }
   cursor: pointer; font-size: 12px; min-height: 34px;
 }
 .hbtn:active { background: rgba(255,255,255,0.35); }
+.menu-item{display:block;width:100%;text-align:left;padding:10px 12px;border:none;background:none;color:#333;font-size:13px;font-family:inherit;cursor:pointer;border-radius:7px;}
+.menu-item:active,.menu-item:hover{background:#eef3ea;}
 .pill { padding: 3px 9px; border-radius: 20px; font-size: 11px; border: 1px solid rgba(255,255,255,0.4); display: flex; align-items: center; }
 
 /* 園地タブ */
@@ -932,12 +934,12 @@ const FIREBASE_PATH = "kajiwara_orchard";
 </head>
 <body>
 
-<div id="header">
-  <h1>🍐 梶原果樹園</h1>
+<div id="header" style="position:relative;flex-wrap:nowrap;">
+  <h1 style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;">🍐 梶原果樹園<span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.85;"></span></h1>
   <select id="header-task" onchange="onHeaderTaskChange()" style="
-    font-size:12px; padding:6px 10px; border-radius:8px;
+    font-size:12px; padding:6px 8px; border-radius:8px;
     border:1px solid rgba(255,255,255,0.5);
-    background:#2a7020; color:#fff; cursor:pointer; min-width:110px;
+    background:#2a7020; color:#fff; cursor:pointer; min-width:96px; margin-left:auto;
     -webkit-appearance:none;
   ">
     <option value="" style="background:#2a7020;color:#fff">— 作業を選ぶ —</option>
@@ -947,10 +949,13 @@ const FIREBASE_PATH = "kajiwara_orchard";
   </span>
   <span id="task-pill-wip"  class="pill" style="display:none;background:rgba(255,200,50,0.25)">中 <span id="n-wip">0</span></span>
   <span id="task-pill-done" class="pill" style="display:none;background:rgba(100,220,100,0.25)">済 <span id="n-done">0</span></span>
-  <button class="hbtn" id="btn-compare" onclick="toggleCompare()">📅 年比較</button>
-  <button class="hbtn" id="btn-reset" onclick="resetAllToTodo()" style="background:rgba(255,100,100,0.3)">↺ リセット</button>
-  <button class="hbtn" onclick="saveData()">💾 保存</button>
-  <button class="hbtn" onclick="document.getElementById('loadFile').click()">📂 読込</button>
+  <button class="hbtn" id="hdr-menu-btn" onclick="toggleHdrMenu(event)" style="font-size:16px;line-height:1;padding:4px 9px;">⋯</button>
+  <div id="hdr-menu" style="display:none;position:absolute;top:46px;right:8px;z-index:850;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3);padding:6px;min-width:160px;">
+    <button class="menu-item" id="btn-compare" onclick="toggleCompare();closeHdrMenu()">📅 年比較</button>
+    <button class="menu-item" id="btn-reset" onclick="resetAllToTodo();closeHdrMenu()">↺ 全て未着手に戻す</button>
+    <button class="menu-item" onclick="saveData();closeHdrMenu()">💾 データ保存</button>
+    <button class="menu-item" onclick="document.getElementById('loadFile').click();closeHdrMenu()">📂 データ読込</button>
+  </div>
   <input type="file" id="loadFile" accept=".json" style="display:none" onchange="loadData(event)">
 </div>
 
@@ -1023,26 +1028,28 @@ const FIREBASE_PATH = "kajiwara_orchard";
     </div>
   </div>
 
-  <div id="line-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#e0f7fa;border:1.5px solid #00bcd4;border-radius:10px;padding:10px 14px;font-size:12px;color:#006978;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-    <b style="display:block;margin-bottom:4px;">📏 線を描画中</b>
-    地図をタップして点を追加（始点→終点）　点の数: <span id="line-cnt">0</span>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="line-colors"></span></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="line-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:6px;margin-top:8px;">
-      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">↩ 1つ戻す</button>
-      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1.2;min-height:38px;">✅ 確定</button>
-      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:8px;padding:8px 10px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">全取消</button>
+  <div id="line-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#e0f7fa;border:1.5px solid #00bcd4;border-radius:10px;padding:6px 9px;font-size:11px;color:#006978;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+      <b id="line-title" style="white-space:nowrap;">📏 配管 点:<span id="line-cnt">0</span></b>
+      <span id="line-colors" style="margin-left:auto;"></span>
+      <span id="line-weights" style="padding-left:5px;"></span>
+    </div>
+    <div class="dbtns" style="display:flex;gap:5px;margin-top:5px;">
+      <button onclick="removeLastLinePt()" style="background:#fff;color:#006978;border:1px solid #00bcd4;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">↩ 戻す</button>
+      <button onclick="confirmLine()" style="background:#00bcd4;color:#fff;border:1px solid #00bcd4;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1.2;min-height:32px;">✅ 確定</button>
+      <button onclick="cancelLine()" style="background:#fff5f5;color:#c04040;border:1px solid #e08080;border-radius:7px;padding:6px 8px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">全取消</button>
     </div>
   </div>
 
-  <div id="line-edit-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#fff3e0;border:1.5px solid #ff9800;border-radius:10px;padding:10px 14px;font-size:12px;color:#9a5a00;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-    <b style="display:block;margin-bottom:4px;">📏 線を編集中</b>
-    オレンジの点をドラッグで移動
-    <div style="display:flex;align-items:center;gap:6px;margin-top:6px;flex-wrap:wrap;">色 <span id="le-colors"></span></div>
-    <div style="display:flex;align-items:center;gap:6px;margin-top:5px;flex-wrap:wrap;">太さ <span id="le-weights"></span></div>
-    <div class="dbtns" style="display:flex;gap:8px;margin-top:8px;">
-      <button onclick="delLine()" style="background:#fff5f5;color:#c04040;border:1.5px solid #e08080;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">🗑 削除</button>
-      <button onclick="deselectLine()" style="background:#ff9800;color:#fff;border:1px solid #ff9800;border-radius:8px;padding:8px 14px;font-size:12px;cursor:pointer;flex:1;min-height:38px;">完了</button>
+  <div id="line-edit-banner" style="display:none;position:absolute;top:10px;left:64px;right:10px;z-index:500;background:#fff3e0;border:1.5px solid #ff9800;border-radius:10px;padding:6px 9px;font-size:11px;color:#9a5a00;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+    <div style="display:flex;align-items:center;flex-wrap:wrap;gap:5px;">
+      <b id="line-edit-title" style="white-space:nowrap;">📏 編集 (点をドラッグ)</b>
+      <span id="le-colors" style="margin-left:auto;"></span>
+      <span id="le-weights" style="padding-left:5px;"></span>
+    </div>
+    <div class="dbtns" style="display:flex;gap:5px;margin-top:5px;">
+      <button onclick="delLine()" style="background:#fff5f5;color:#c04040;border:1.5px solid #e08080;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">🗑 削除</button>
+      <button onclick="deselectLine()" style="background:#ff9800;color:#fff;border:1px solid #ff9800;border-radius:7px;padding:6px 10px;font-size:11px;cursor:pointer;flex:1;min-height:32px;">完了</button>
     </div>
   </div>
 
@@ -1194,6 +1201,12 @@ const FIREBASE_PATH = "kajiwara_orchard";
         <div class="frow"><div class="flabel">植付年（西暦）</div>
           <input type="number" id="ei-plantyear" min="1900" max="2100" placeholder="例：2020" oninput="autoSave()">
           <div id="ei-age-calc" style="font-size:12px;color:#3a8a2a;font-weight:600;margin-top:5px"></div>
+        </div>
+        <div class="frow"><div class="flabel">区分</div>
+          <label style="display:flex;align-items:center;gap:7px;font-size:13px;cursor:pointer;">
+            <input type="checkbox" id="ei-shrink" onchange="autoSave()" style="width:18px;height:18px;">
+            ▲ 縮伐木にする（三角アイコン）
+          </label>
         </div>
         <div class="frow"><div class="flabel">メモ</div><textarea id="ei-memo" oninput="autoSave()"></textarea></div>
         <button class="gbtn red" onclick="delTree()">🗑 この木を削除</button>
@@ -1387,9 +1400,16 @@ function toggleTrees(){
   const b=document.getElementById('btn-trees'); if(b) b.classList.toggle('on', treesVisible);
   document.getElementById('statusbar').textContent = treesVisible ? '🌳 木を表示中' : '🌳 木を非表示中';
 }
+const LINE_LABEL = (APP_MODE==='map') ? '線' : '配管';
+function setSyncDotHidden(h){ const d=document.getElementById('sync-dot'); if(d) d.style.display = h?'none':''; }
 function applyAppMode(){
   const m=APP_MODE;
   const show=(id,v)=>{ const e=document.getElementById(id); if(e) e.style.display=v?'':'none'; };
+  // ツール名（マップ＝線／点検＝配管）
+  const setTxt=(id,t)=>{ const e=document.getElementById(id); if(e) e.innerHTML=t; };
+  const bl=document.getElementById('btn-line'); if(bl) bl.title=LINE_LABEL+'を描く';
+  setTxt('line-title','📏 '+LINE_LABEL+' 点:<span id="line-cnt">0</span>');
+  setTxt('line-edit-title','📏 '+LINE_LABEL+'を編集 (点をドラッグ)');
   show('btn-add', m==='map'); show('btn-move', m==='map');
   show('btn-line', m==='map'||m==='facility'); show('btn-facility', m==='facility');
   show('btn-issue', m==='issue');
@@ -1398,7 +1418,7 @@ function applyAppMode(){
     show('panel-toggle', false);
     const side=document.getElementById('side'); if(side){ side.classList.remove('open'); side.style.display='none'; }
     show('legend', false);
-    ['header-task','task-pill-todo','task-pill-wip','task-pill-done','btn-compare','btn-reset'].forEach(id=>show(id,false));
+    ['header-task','task-pill-todo','task-pill-wip','task-pill-done','btn-compare','btn-reset','hdr-menu-btn'].forEach(id=>show(id,false));
   }
 }
 // 病害虫
@@ -1564,7 +1584,7 @@ function setTool(t) {
     t==='add'      ? '地図をタップして木を配置 / ↖で選択に戻す' :
     t==='move'     ? '✋ 移動モード：木をドラッグして移動 / ↖で終了' :
     t==='issue'    ? '🐛 地図をタップして病害虫の発生地点をマーク / ↖で終了' :
-    t==='line'     ? '📏 地図をタップして配管ラインを描く（始点→終点→確定）/ ↖で終了' :
+    t==='line'     ? ('📏 地図をタップして'+LINE_LABEL+'を描く（始点→終点→確定）/ ↖で終了') :
     t==='facility' ? '💧 地図をタップして設備（スプリンクラー等）を配置 / ↖で終了' :
                      'タップで木を選択 ／ 🌳で木を追加';
 }
@@ -1573,8 +1593,8 @@ function setTool(t) {
 // 線（ライン）の描画・編集
 // ==============================
 // 色・太さの選択UI
-function swatchHtml(c,active){ return `<span data-c="${c}" style="display:inline-block;width:20px;height:20px;border-radius:50%;background:${c};border:2px solid ${active?'#333':'#bbb'};cursor:pointer;vertical-align:middle;"></span>`; }
-function weightBtnHtml(x,active){ return `<button data-w="${x.w}" style="padding:3px 9px;border-radius:6px;border:1.5px solid ${active?'#00bcd4':'#ccc'};background:${active?'#e0f7fa':'#fff'};font-size:11px;cursor:pointer;font-family:inherit;">${x.l}</button>`; }
+function swatchHtml(c,active){ return `<span data-c="${c}" style="display:inline-block;width:15px;height:15px;border-radius:50%;background:${c};border:2px solid ${active?'#333':'#ccc'};cursor:pointer;vertical-align:middle;margin:1px;"></span>`; }
+function weightBtnHtml(x,active){ return `<button data-w="${x.w}" style="padding:2px 7px;border-radius:5px;border:1.5px solid ${active?'#00bcd4':'#ccc'};background:${active?'#e0f7fa':'#fff'};font-size:10px;cursor:pointer;font-family:inherit;">${x.l}</button>`; }
 function buildDrawPalette(){
   const cc=document.getElementById('line-colors');
   if(cc){ cc.innerHTML=LINE_COLORS.map(c=>swatchHtml(c,c===lineColor)).join(' ');
@@ -1585,7 +1605,7 @@ function buildDrawPalette(){
 }
 function startLineDraw(){
   _cleanLine(); linePts=[];
-  document.getElementById('line-banner').style.display='block';
+  document.getElementById('line-banner').style.display='block'; setSyncDotHidden(true);
   document.getElementById('line-cnt').textContent='0';
   buildDrawPalette();
 }
@@ -1617,7 +1637,7 @@ function _cleanLine(){
   lineMarkers.forEach(m=>{try{map.removeLayer(m);}catch(e){}}); lineMarkers=[];
   if(linePoly){try{map.removeLayer(linePoly);}catch(e){}linePoly=null;}
   linePts=[];
-  const b=document.getElementById('line-banner'); if(b) b.style.display='none';
+  const b=document.getElementById('line-banner'); if(b) b.style.display='none'; setSyncDotHidden(false);
 }
 function drawAllLines(){
   Object.values(lpolyLayers).forEach(l=>{try{map.removeLayer(l);}catch(e){}}); lpolyLayers={};
@@ -1654,14 +1674,14 @@ function selectLine(id){
     vm.on('dragend',()=>{ map.dragging.enable(); });
     lineVertexMarkers.push(vm);
   });
-  document.getElementById('line-edit-banner').style.display='block';
+  document.getElementById('line-edit-banner').style.display='block'; setSyncDotHidden(true);
 }
 function redrawLine(id){ const ln=lines.find(x=>x.id===id), pl=lpolyLayers[id]; if(ln&&pl) pl.setLatLngs(ln.pts.map(p=>[p.lat,p.lng])); }
 function deselectLine(){
   lineVertexMarkers.forEach(m=>{try{map.removeLayer(m);}catch(e){}}); lineVertexMarkers=[];
   if(selLineId){ const pl=lpolyLayers[selLineId], ln=lines.find(x=>x.id===selLineId); if(pl&&ln) pl.setStyle({color:ln.color||LINE_COLOR,weight:ln.weight||2}); }
   selLineId=null;
-  const b=document.getElementById('line-edit-banner'); if(b) b.style.display='none';
+  const b=document.getElementById('line-edit-banner'); if(b) b.style.display='none'; setSyncDotHidden(false);
 }
 function delLine(){
   if(!selLineId) return;
@@ -1933,13 +1953,20 @@ function ageCategory(age) {
   if (age <= 50) return { label:'成木', factor:1.05 };
   return { label:'老木', factor:1.3 };
 }
+// 木の区分（縮伐木は手動指定・三角形アイコン）
+function treeCat(t) {
+  if (t && t.shrink) return { label:'縮伐木', factor:0.8, shape:'tri' };
+  const info = ageCategory(treeAgeAt(t, curYear));
+  return { label:info.label, factor:info.factor, shape:'circle' };
+}
 
 function makeIcon(t, sel) {
   const zoom = map.getZoom();
   const base = zoom >= 21 ? 34 : zoom >= 20 ? 26 : zoom >= 19 ? 18 : zoom >= 18 ? 12 : 10;
-  // 樹齢区分で大きさを変える
-  const ageInfo = ageCategory(treeAgeAt(t, curYear));
-  const sz = Math.max(8, Math.round((sel ? base + 6 : base) * ageInfo.factor));
+  // 区分で大きさ・形を変える（縮伐木は三角形）
+  const cat = treeCat(t);
+  const isTri = cat.shape === 'tri';
+  const sz = Math.max(8, Math.round((sel ? base + 6 : base) * cat.factor));
   const lbl = (t.variety||'').substring(0,2);
   const fsize = Math.max(7, Math.round(sz * 0.35));
   let col = treeColor(t);
@@ -1964,7 +1991,7 @@ function makeIcon(t, sel) {
 
   const doneCount = TASKS.filter(tk => getTaskSt(t, curYear, tk) === 'done').length;
   const headerTask = document.getElementById('header-task')?.value || '';
-  const displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : t.status;
+  const displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : 'todo';  // 作業未選択時は全て未着手の見た目
   let inner = '', extra = '';
 
   if (displaySt === 'todo') {
@@ -1996,9 +2023,24 @@ function makeIcon(t, sel) {
     ? `<div style="position:absolute;top:${sz+4}px;left:50%;transform:translateX(-50%);white-space:nowrap;background:rgba(0,0,0,0.65);color:#fff;font-size:9px;padding:1px 6px;border-radius:4px;pointer-events:none">${t.variety||''}</div>`
     : '';
 
+  let html;
+  if (isTri) {
+    // 縮伐木：三角形。枠線はドロップシャドウで表現（clip-pathでbox-shadowは消えるため）
+    let filterCss = '';
+    if (displaySt === 'wip')  filterCss = 'filter:drop-shadow(0 0 1px #f0c000) drop-shadow(0 0 2px #f0c000cc);';
+    else if (displaySt === 'done') filterCss = 'filter:drop-shadow(0 0 1px #2a7ab0) drop-shadow(0 0 2px #2a7ab0cc);';
+    if (sel) filterCss = 'filter:drop-shadow(0 0 3px rgba(80,220,80,0.95)) drop-shadow(0 0 5px rgba(80,220,80,0.7));';
+    if (t.id === gpsNearestId) filterCss = 'filter:drop-shadow(0 0 4px #ff5a00) drop-shadow(0 0 8px rgba(255,90,0,0.9));';
+    html = `<div style="position:relative;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;">`
+      + `<div style="position:absolute;inset:0;background:${col};clip-path:polygon(50% 3%,97% 96%,3% 96%);${filterCss}"></div>`
+      + `<div style="position:relative;margin-top:${Math.round(sz*0.12)}px;display:flex;align-items:center;justify-content:center;">${inner}</div>`
+      + `${progressBar}${nameTag}</div>`;
+  } else {
+    html = `<div style="position:relative;width:${sz}px;height:${sz}px;border-radius:50%;background:${col};${extra}display:flex;align-items:center;justify-content:center;">${inner}${progressBar}${nameTag}</div>`;
+  }
   return L.divIcon({
     className:'',
-    html:`<div style="position:relative;width:${sz}px;height:${sz}px;border-radius:50%;background:${col};${extra}display:flex;align-items:center;justify-content:center;">${inner}${progressBar}${nameTag}</div>`,
+    html: html,
     iconSize:[sz+40, sz+20],
     iconAnchor:[sz/2, sz/2]
   });
@@ -2093,11 +2135,12 @@ function treeAgeAt(t, year) {
 function updateAgeCalc(t) {
   const el = document.getElementById('ei-age-calc'); if (!el) return;
   const a = treeAgeAt(t, curYear);
+  const shrinkNote = t.shrink ? '　▲縮伐木' : '';
   if (a != null && !isNaN(a)) {
     const cat = ageCategory(a).label;
-    el.textContent = `→ ${curYear}年時点の樹齢：約${a}年目（${cat}）`;
+    el.textContent = `→ ${curYear}年時点の樹齢：約${a}年目（${cat}）${shrinkNote}`;
   } else {
-    el.textContent = '植付年を入力すると樹齢を自動計算します';
+    el.textContent = t.shrink ? '▲ 縮伐木（三角アイコン）' : '植付年を入力すると樹齢を自動計算します';
   }
 }
 
@@ -2163,6 +2206,7 @@ function selectTree(id) {
   setBadge(t.status);
   document.getElementById('ei-variety').value = t.variety||'新高';
   document.getElementById('ei-plantyear').value = t.plantYear || (t.age ? (new Date().getFullYear() - Number(t.age)) : '');
+  document.getElementById('ei-shrink').checked = !!t.shrink;
   updateAgeCalc(t);
   document.getElementById('ei-memo').value = t.memo||'';
   refreshCurrentTaskUI(t);
@@ -2209,6 +2253,7 @@ function autoSave() {
   t.variety = document.getElementById('ei-variety').value;
   const py = document.getElementById('ei-plantyear').value;
   t.plantYear = py ? Number(py) : null;
+  t.shrink  = document.getElementById('ei-shrink').checked;
   t.memo    = document.getElementById('ei-memo').value;
   updateAgeCalc(t);
   refreshMarker(selId); renderList(); renderLegend();
@@ -2232,6 +2277,13 @@ function onHeaderTaskChange() {
   try { localStorage.setItem('kajiwara_map_lasttask', document.getElementById('header-task').value||''); } catch(e){}
   updateStats(); trees.forEach(t => refreshMarker(t.id));
 }
+function updateHdrDate(){
+  const d=new Date(); const w=['日','月','火','水','木','金','土'][d.getDay()];
+  const el=document.getElementById('hdr-date'); if(el) el.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+w+')';
+}
+function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); m.style.display=(m.style.display==='none'||!m.style.display)?'block':'none'; }
+function closeHdrMenu(){ const m=document.getElementById('hdr-menu'); if(m)m.style.display='none'; }
+document.addEventListener('click',function(e){ const m=document.getElementById('hdr-menu'); const b=document.getElementById('hdr-menu-btn'); if(m&&m.style.display==='block'&&!m.contains(e.target)&&e.target!==b){ m.style.display='none'; } });
 function resetAllToTodo() {
   const task = document.getElementById('header-task')?.value || '';
   const scope = task ? `「${task}」` : '全作業';
@@ -2868,10 +2920,11 @@ function loadData(e) {
 // ==============================
 // 凡例
 // ==============================
-let legendOpen = true;
+let legendOpen = false;   // 初期は隠す
 function renderLegend() {
   const used=[...new Set(trees.filter(t=>t.oid===curOid).map(t=>t.variety).filter(Boolean))];
   const el=document.getElementById('legend-body');
+  const tg=document.getElementById('legend-toggle'); if(tg) tg.textContent = legendOpen ? '▲ 隠す' : '▼ 表示';
   if(!legendOpen){el.style.display='none';return;}
   el.style.display='block';
   el.innerHTML = Object.keys(VARIETY_COLOR).map(v => {
@@ -2899,7 +2952,7 @@ updateStats();
 renderLegend();
 initListTaskFilter();
 initHeaderTaskSelect();
-// 前回選んでいた作業を復元
+// 前回選んでいた作業を復元（作業未選択時は全マーカー未着手の見た目）
 try {
   const lastTask = localStorage.getItem('kajiwara_map_lasttask') || '';
   const sel = document.getElementById('header-task');
@@ -2907,6 +2960,7 @@ try {
 } catch(e){}
 updateStats();
 document.getElementById('cur-year-label').textContent = curYear;
+updateHdrDate();
 applyAppMode();
 
 // Cmd/Ctrl+Z

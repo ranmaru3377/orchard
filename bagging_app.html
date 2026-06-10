@@ -304,15 +304,19 @@ function updateBagPrevStock(){
   if(!v || v==='その他'){ prevEl.style.display='none'; calcEl.style.display='none'; return; }
   calcEl.style.display='block';
   const recDate=document.getElementById('rec-date').value||'9999-99-99';
-  // 選択日より前の最新残数（前日・前回）。なければ最新の残数。
-  const all=stockRecords.filter(s=>s.bagType===v).sort((a,b)=>a.date.localeCompare(b.date));
-  const before=all.filter(s=>s.date < recDate);
-  const ref=before.length ? before[before.length-1] : (all.length ? all[all.length-1] : null);
+  // 当日を含む「これまでの最新残数」を起点にする（区画をまたいでも連鎖計算）
+  const all=stockRecords.filter(s=>s.bagType===v).sort((a,b)=>a.date.localeCompare(b.date)||a.id-b.id);
+  const upto=all.filter(s=>s.date <= recDate);
+  const ref=upto.length ? upto[upto.length-1] : null;
   prevStockVal = ref ? ref.remaining : 0;
   prevEl.style.display='block';
   if(ref){
     const[,m,d]=ref.date.split('-');
-    prevEl.textContent=`📦 前回残数：${ref.remaining.toLocaleString()}枚（${+m}/${+d}時点）`;
+    if(ref.date===recDate){
+      prevEl.textContent=`📦 本日の最新残数：${ref.remaining.toLocaleString()}枚（この区画はここから計算）`;
+    } else {
+      prevEl.textContent=`📦 前回残数：${ref.remaining.toLocaleString()}枚（${+m}/${+d}時点）`;
+    }
   } else {
     prevEl.textContent='📦 前回残数：記録なし（0として計算）';
   }
@@ -343,7 +347,11 @@ function applyBaggingCalc(){
   if(ex){ ex.remaining=cnt; } else { stockRecords.push({id:Date.now(),date,bagType:bag,remaining:cnt}); }
   localStorage.setItem(STOCK_KEY,JSON.stringify(stockRecords));
   if(document.getElementById('stock-latest')){ renderStockLatest(); renderStockHistory(); }
-  alert('✅ 袋掛け枚数に反映し、当日残数（'+bag+'）を記録しました');
+  // 次の区画に備えて、補充・当日残をクリアし、前回残数を今記録した残数に更新
+  document.getElementById('replenish').value='';
+  document.getElementById('today-stock').value='';
+  updateBagPrevStock();
+  alert('✅ 袋掛け枚数に反映し、当日残数（'+bag+'）を記録しました（'+cnt.toLocaleString()+'枚）。\n次の区画はこの残数を起点に計算します。');
 }
 
 // 袋種の管理（追加・並べ替え・削除）
