@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -120,11 +124,12 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     </div>
   </div>
   <div class="card">
-    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">🔖 サブカテゴリの管理</div>
-    <div class="note" style="margin-bottom:6px;">在庫表の「サブ」欄で選べる小分類です。✏️名前変更／▲▼並べ替え／✕削除</div>
+    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">🔖 サブカテゴリの管理（カテゴリごと）</div>
+    <div class="note" style="margin-bottom:6px;">カテゴリを選ぶと、そのカテゴリのサブだけを管理できます。在庫表の「サブ」欄にも、その資材のカテゴリのサブが候補表示されます。</div>
+    <select id="sub-cat-sel" onchange="onSubCatChange()" style="width:100%;margin-bottom:8px;"></select>
     <div id="sub-mgr"></div>
     <div style="display:flex;gap:6px;margin-top:8px;">
-      <input type="text" id="new-sub" placeholder="サブカテゴリを追加" style="flex:1;">
+      <input type="text" id="new-sub" placeholder="このカテゴリにサブを追加" style="flex:1;">
       <button class="btn" onclick="addSub()">＋追加</button>
     </div>
   </div>
@@ -142,7 +147,24 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
 
 <script>
 const DEFAULT_CATS=['段ボール箱','トレー','ネットキャップ','緩衝・包装'];
-const DEFAULT_SUBS=['組立','強化','化粧','個入','その他箱','5kg','7.5kg','モールド','3kg','2kg','W系','P系','Y・G系','段','ネット','紙・パッド','封緘'];
+// サブカテゴリは各カテゴリに紐付け
+const DEFAULT_SUBS_BY_CAT={
+  '段ボール箱':['組立','強化','化粧','個入','その他箱'],
+  'トレー':['5kg','7.5kg','モールド','3kg','2kg'],
+  'ネットキャップ':['W系','P系','Y・G系'],
+  '緩衝・包装':['段','ネット','紙・パッド','封緘']
+};
+function cloneDefaultSubs(){ const o={}; for(const k in DEFAULT_SUBS_BY_CAT) o[k]=DEFAULT_SUBS_BY_CAT[k].slice(); return o; }
+function getSubs(cat){ return (cat && subsByCat[cat]) ? subsByCat[cat] : []; }
+function ensureSubCat(cat){ if(cat && !subsByCat[cat]) subsByCat[cat]=[]; }
+// 旧データ（フラットなsubs）→ カテゴリ別へ移行
+function buildSubsByCat(d){
+  if(d && d.subsByCat && typeof d.subsByCat==='object' && !Array.isArray(d.subsByCat)) return JSON.parse(JSON.stringify(d.subsByCat));
+  const map=cloneDefaultSubs();
+  const mats=(d&&d.materials)||[];
+  mats.forEach(m=>{ if(m.cat){ if(!map[m.cat]) map[m.cat]=[]; if(m.sub && !map[m.cat].includes(m.sub)) map[m.cat].push(m.sub); } });
+  return map;
+}
 // 元Excel（梨資材計算表）の標準品目 [カテゴリ, サブ, [品目]]
 const STANDARD=[
   ['段ボール箱','組立',['5kg組立(M)','5kg組立(L)','5kg組立(LL)','2kg組立(M)','2kg組立(L)']],
@@ -168,7 +190,8 @@ function loadStandard(){
   let added=0, seq=0;
   STANDARD.forEach(([cat,sub,names])=>{
     if(!cats.includes(cat)) cats.push(cat);
-    if(sub && !subs.includes(sub)) subs.push(sub);
+    ensureSubCat(cat);
+    if(sub && !subsByCat[cat].includes(sub)) subsByCat[cat].push(sub);
     names.forEach(nm=>{
       const exists=materials.some(m=>m.cat===cat && (m.sub||'')===(sub||'') && (m.name||'')===nm);
       if(!exists){ materials.push({id:'m'+Date.now()+(seq++)+Math.floor(Math.random()*1000),cat,sub:sub||'',name:nm,unit:'',years:{},plan:{}}); added++; }
@@ -185,7 +208,8 @@ function loadStandard(){
 }
 let materials=[];
 let cats=DEFAULT_CATS.slice();
-let subs=DEFAULT_SUBS.slice();
+let subsByCat=cloneDefaultSubs();
+let subMgrCat='';   // サブ管理で選択中のカテゴリ
 
 function num(v){ const n=parseFloat(v); return isNaN(n)?0:n; }
 function ydOf(it,y){ if(!it.years) it.years={}; if(!it.years[y]) it.years[y]={s:0,o:0,e:0}; return it.years[y]; }
@@ -225,9 +249,9 @@ function render(){
       || (a.sub||'').localeCompare(b.sub||'')
       || (a.name||'').localeCompare(b.name||'');
   });
-  const subList=[...new Set([...subs, ...materials.map(m=>m.sub).filter(Boolean)])];
   let stockValTotal=0;
-  let h='<datalist id="sub-list">'+subList.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
+  // カテゴリごとのサブ候補（datalist）
+  let h=cats.map((c,i)=>`<datalist id="subdl-${i}">`+getSubs(c).map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>').join('');
   h+='<table><tr>'
     +'<th>カテゴリ</th><th>サブ</th><th>資材名</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
@@ -245,7 +269,7 @@ function render(){
     stockValTotal+=stockVal;
     h+=`<tr>
       <td><select onchange="setField('${it.id}','cat',this.value)">${catOpts(it.cat)}</select></td>
-      <td><input type="text" list="sub-list" style="width:78px;" value="${esc(it.sub)}" onchange="setField('${it.id}','sub',this.value)"></td>
+      <td><input type="text" list="${cats.indexOf(it.cat)>=0?'subdl-'+cats.indexOf(it.cat):''}" style="width:78px;" value="${esc(it.sub)}" onchange="setField('${it.id}','sub',this.value)"></td>
       <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
       <td><input type="text" class="cell-unit" value="${esc(it.unit)}" onchange="setField('${it.id}','unit',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.s||0}" onchange="setYear('${it.id}',${py},'s',this.value)"></td>
@@ -271,7 +295,7 @@ function render(){
 function fmt(n){ n=Math.round(n*10)/10; return n.toLocaleString(); }
 function esc(s){ return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return; it[f]=v; if(f==='sub'&&v&&!subs.includes(v)) subs.push(v); persist(); render(); }
+function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return; it[f]=v; if(f==='sub'&&v&&it.cat){ ensureSubCat(it.cat); if(!subsByCat[it.cat].includes(v)) subsByCat[it.cat].push(v); } persist(); render(); if(f==='cat') renderSubMgr(); }
 function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
 function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
 function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この資材')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
@@ -363,44 +387,55 @@ function renderCatList(){
   el.innerHTML=cats.map((c,i)=>`<div style="display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
     <span style="flex:1;font-size:0.85rem;">${esc(c)}</span>${rowBtns(cats,i,'Cat')}</div>`).join('') || '<div class="note">カテゴリがありません</div>';
 }
-function addCat(){ const el=document.getElementById('new-cat'); const n=el.value.trim(); if(!n)return; if(cats.includes(n)){alert('もうあります');return;} cats.push(n); el.value=''; persist(); renderCatList(); render(); }
+function addCat(){ const el=document.getElementById('new-cat'); const n=el.value.trim(); if(!n)return; if(cats.includes(n)){alert('もうあります');return;} cats.push(n); ensureSubCat(n); el.value=''; persist(); renderCatList(); renderSubMgr(); render(); }
 function moveCat(i,d){ const j=i+d; if(j<0||j>=cats.length)return; const t=cats[i];cats[i]=cats[j];cats[j]=t; persist(); renderCatList(); render(); }
 function editCat(i){
   const old=cats[i]; const nw=prompt('カテゴリ名を変更',old); if(nw===null)return; const v=nw.trim(); if(!v)return;
   if(v!==old && cats.includes(v)){alert('同名のカテゴリがあります');return;}
-  cats[i]=v; materials.forEach(m=>{ if(m.cat===old) m.cat=v; }); persist(); renderCatList(); render();
+  cats[i]=v; materials.forEach(m=>{ if(m.cat===old) m.cat=v; });
+  // サブも引き継ぐ
+  if(old!==v){ subsByCat[v]=subsByCat[old]||[]; delete subsByCat[old]; if(subMgrCat===old) subMgrCat=v; }
+  persist(); renderCatList(); renderSubMgr(); render();
 }
 function delCat(i){
   const c=cats[i];
   const cnt=materials.filter(m=>m.cat===c).length;
   if(!confirm('カテゴリ「'+c+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の資材は「未分類」になります。資材自体は残ります）':'')))return;
   materials.forEach(m=>{ if(m.cat===c) m.cat=''; });
-  cats.splice(i,1); persist(); renderCatList(); render();
+  delete subsByCat[c]; if(subMgrCat===c) subMgrCat='';
+  cats.splice(i,1); persist(); renderCatList(); renderSubMgr(); render();
 }
 
-// ===== サブカテゴリ管理 =====
+// ===== サブカテゴリ管理（カテゴリごと） =====
+function onSubCatChange(){ subMgrCat=document.getElementById('sub-cat-sel').value; renderSubMgr(); }
 function renderSubMgr(){
-  const el=document.getElementById('sub-mgr'); if(!el)return;
-  el.innerHTML=subs.map((s,i)=>`<div style="display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
-    <span style="flex:1;font-size:0.85rem;">${esc(s)}</span>${rowBtns(subs,i,'Sub')}</div>`).join('') || '<div class="note">サブカテゴリがありません</div>';
+  const sel=document.getElementById('sub-cat-sel');
+  const el=document.getElementById('sub-mgr'); if(!el||!sel)return;
+  // カテゴリ選択肢
+  if(!cats.includes(subMgrCat)) subMgrCat=cats[0]||'';
+  sel.innerHTML=cats.map(c=>`<option ${c===subMgrCat?'selected':''}>${esc(c)}</option>`).join('') || '<option value="">カテゴリがありません</option>';
+  const list=getSubs(subMgrCat);
+  if(!subMgrCat){ el.innerHTML='<div class="note">先にカテゴリを追加してください</div>'; return; }
+  el.innerHTML=list.map((s,i)=>`<div style="display:flex;align-items:center;gap:5px;padding:5px 0;border-bottom:1px solid #f0f0f0;">
+    <span style="flex:1;font-size:0.85rem;">${esc(s)}</span>${rowBtns(list,i,'Sub')}</div>`).join('') || '<div class="note">「'+esc(subMgrCat)+'」のサブカテゴリがありません</div>';
 }
-function addSub(){ const el=document.getElementById('new-sub'); const n=el.value.trim(); if(!n)return; if(subs.includes(n)){alert('もうあります');return;} subs.push(n); el.value=''; persist(); renderSubMgr(); render(); }
-function moveSub(i,d){ const j=i+d; if(j<0||j>=subs.length)return; const t=subs[i];subs[i]=subs[j];subs[j]=t; persist(); renderSubMgr(); render(); }
+function addSub(){ if(!subMgrCat){alert('先にカテゴリを選んでください');return;} const el=document.getElementById('new-sub'); const n=el.value.trim(); if(!n)return; ensureSubCat(subMgrCat); if(subsByCat[subMgrCat].includes(n)){alert('もうあります');return;} subsByCat[subMgrCat].push(n); el.value=''; persist(); renderSubMgr(); render(); }
+function moveSub(i,d){ const arr=getSubs(subMgrCat); const j=i+d; if(j<0||j>=arr.length)return; const t=arr[i];arr[i]=arr[j];arr[j]=t; persist(); renderSubMgr(); render(); }
 function editSub(i){
-  const old=subs[i]; const nw=prompt('サブカテゴリ名を変更',old); if(nw===null)return; const v=nw.trim(); if(!v)return;
-  if(v!==old && subs.includes(v)){alert('同名のサブがあります');return;}
-  subs[i]=v; materials.forEach(m=>{ if(m.sub===old) m.sub=v; }); persist(); renderSubMgr(); render();
+  const arr=getSubs(subMgrCat); const old=arr[i]; const nw=prompt('サブカテゴリ名を変更',old); if(nw===null)return; const v=nw.trim(); if(!v)return;
+  if(v!==old && arr.includes(v)){alert('同名のサブがあります');return;}
+  arr[i]=v; materials.forEach(m=>{ if(m.cat===subMgrCat && m.sub===old) m.sub=v; }); persist(); renderSubMgr(); render();
 }
 function delSub(i){
-  const s=subs[i];
-  const cnt=materials.filter(m=>m.sub===s).length;
-  if(!confirm('サブカテゴリ「'+s+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の資材のサブが空になります。資材自体は残ります）':'')))return;
-  materials.forEach(m=>{ if(m.sub===s) m.sub=''; });
-  subs.splice(i,1); persist(); renderSubMgr(); render();
+  const arr=getSubs(subMgrCat); const s=arr[i];
+  const cnt=materials.filter(m=>m.cat===subMgrCat && m.sub===s).length;
+  if(!confirm('「'+subMgrCat+'」のサブ「'+s+'」を削除しますか？'+(cnt?'\n（'+cnt+'件の資材のサブが空になります。資材自体は残ります）':'')))return;
+  materials.forEach(m=>{ if(m.cat===subMgrCat && m.sub===s) m.sub=''; });
+  arr.splice(i,1); persist(); renderSubMgr(); render();
 }
 
 function exportJson(){
-  const data=JSON.stringify({materials,cats},null,2);
+  const data=JSON.stringify({materials,cats,subsByCat},null,2);
   const fname='kajiwara_shizai_'+new Date().toISOString().slice(0,10)+'.json';
   try{ if(navigator.share){ const f=new File([data],fname,{type:'application/json'}); navigator.share({files:[f],title:'資材データ'}).catch(()=>dl(data,fname)); } else dl(data,fname); }catch(e){ dl(data,fname); }
 }
@@ -409,14 +444,14 @@ function dl(data,fname){ const a=document.createElement('a'); a.href=URL.createO
 // ===== Firebase 同期 =====
 const SYNC={id:Math.random().toString(36).slice(2),applying:false,ready:false};
 let dataRef=null,lastJSON=null,syncTimer=null;
-function snapshotJSON(){ return JSON.stringify({materials,cats,subs}); }
+function snapshotJSON(){ return JSON.stringify({materials,cats,subsByCat}); }
 function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){el.textContent=t;el.style.background=c;} }
 function persist(){ if(syncTimer)clearTimeout(syncTimer); syncTimer=setTimeout(pushIfChanged,700); }
 function pushIfChanged(){
   if(!SYNC.ready||SYNC.applying||!dataRef)return;
   const cur=snapshotJSON(); if(cur===lastJSON)return; lastJSON=cur;
   setSyncDot('保存中…','#e09020');
-  dataRef.set({materials,cats,subs,writer:SYNC.id,updatedAt:Date.now()})
+  dataRef.set({materials,cats,subsByCat,writer:SYNC.id,updatedAt:Date.now()})
     .then(()=>setSyncDot('同期済 ✓','#3a8a2a'))
     .catch(e=>{setSyncDot('保存失敗','#c0392b');console.error(e);lastJSON=null;});
 }
@@ -424,7 +459,8 @@ function applyRemote(d){
   SYNC.applying=true;
   materials=d.materials||[];
   cats=(d.cats&&d.cats.length)?d.cats:DEFAULT_CATS.slice();
-  subs=(d.subs&&d.subs.length)?d.subs:DEFAULT_SUBS.slice();
+  subsByCat=buildSubsByCat(d);
+  cats.forEach(ensureSubCat);
   renderCatList(); renderSubMgr();
   const active=document.querySelector('.page.active');
   if(active&&active.id==='page-order') renderOrder(); else render();
@@ -453,6 +489,10 @@ window.addEventListener('pagehide',pushIfChanged);
 
 init();
 initFirebase();
+</script>
+<script>
+/* アプリバージョン表示 */
+(function(){fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var v=d&&(d.v||d.version);if(!v)return;var e=document.createElement('div');e.textContent='v'+v;e.style.cssText='position:fixed;right:5px;bottom:4px;z-index:99999;font-size:9px;color:#888;background:rgba(255,255,255,0.55);padding:1px 6px;border-radius:7px;pointer-events:none;font-family:sans-serif;';document.body.appendChild(e);}).catch(function(){});})();
 </script>
 </body>
 </html>

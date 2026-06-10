@@ -925,5 +925,9 @@ window.addEventListener('pagehide',pushIfChanged);
 init();
 initFirebase();
 </script>
+<script>
+/* アプリバージョン表示 */
+(function(){fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var v=d&&(d.v||d.version);if(!v)return;var e=document.createElement('div');e.textContent='v'+v;e.style.cssText='position:fixed;right:5px;bottom:4px;z-index:99999;font-size:9px;color:#888;background:rgba(255,255,255,0.55);padding:1px 6px;border-radius:7px;pointer-events:none;font-family:sans-serif;';document.body.appendChild(e);}).catch(function(){});})();
+</script>
 </body>
 </html>

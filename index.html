@@ -2025,15 +2025,20 @@ function makeIcon(t, sel) {
 
   let html;
   if (isTri) {
-    // 縮伐木：三角形。枠線はドロップシャドウで表現（clip-pathでbox-shadowは消えるため）
+    // 縮伐木：三角形。円と同じく 未着手=白／作業中=黄／完了=青 の縁取りを付ける
+    const TRI = 'polygon(50% 3%,97% 96%,3% 96%)';
+    const bw = Math.max(2, Math.round(sz * 0.14));   // 縁取りの太さ
+    const outline = displaySt === 'wip' ? '#f0c000'
+                  : displaySt === 'done' ? '#2a7ab0'
+                  : 'rgba(255,255,255,0.85)';
+    // 選択・GPS最寄りはドロップシャドウのグローで表現（clip-pathでbox-shadowは消えるため）
     let filterCss = '';
-    if (displaySt === 'wip')  filterCss = 'filter:drop-shadow(0 0 1px #f0c000) drop-shadow(0 0 2px #f0c000cc);';
-    else if (displaySt === 'done') filterCss = 'filter:drop-shadow(0 0 1px #2a7ab0) drop-shadow(0 0 2px #2a7ab0cc);';
     if (sel) filterCss = 'filter:drop-shadow(0 0 3px rgba(80,220,80,0.95)) drop-shadow(0 0 5px rgba(80,220,80,0.7));';
     if (t.id === gpsNearestId) filterCss = 'filter:drop-shadow(0 0 4px #ff5a00) drop-shadow(0 0 8px rgba(255,90,0,0.9));';
-    html = `<div style="position:relative;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;">`
-      + `<div style="position:absolute;inset:0;background:${col};clip-path:polygon(50% 3%,97% 96%,3% 96%);${filterCss}"></div>`
-      + `<div style="position:relative;margin-top:${Math.round(sz*0.12)}px;display:flex;align-items:center;justify-content:center;">${inner}</div>`
+    html = `<div style="position:relative;width:${sz}px;height:${sz}px;display:flex;align-items:center;justify-content:center;${filterCss}">`
+      + `<div style="position:absolute;inset:0;background:${outline};clip-path:${TRI};"></div>`
+      + `<div style="position:absolute;inset:${bw}px;background:${col};clip-path:${TRI};"></div>`
+      + `<div style="position:relative;margin-top:${Math.round(sz*0.14)}px;display:flex;align-items:center;justify-content:center;">${inner}</div>`
       + `${progressBar}${nameTag}</div>`;
   } else {
     html = `<div style="position:relative;width:${sz}px;height:${sz}px;border-radius:50%;background:${col};${extra}display:flex;align-items:center;justify-content:center;">${inner}${progressBar}${nameTag}</div>`;
@@ -3145,6 +3150,10 @@ setInterval(pushIfChanged, 2000);
 window.addEventListener('pagehide', pushIfChanged);
 document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') pushIfChanged(); });
 initFirebase();
+</script>
+<script>
+/* アプリバージョン表示 */
+(function(){fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var v=d&&(d.v||d.version);if(!v)return;var e=document.createElement('div');e.textContent='v'+v;e.style.cssText='position:fixed;right:5px;bottom:4px;z-index:99999;font-size:9px;color:#888;background:rgba(255,255,255,0.55);padding:1px 6px;border-radius:7px;pointer-events:none;font-family:sans-serif;';document.body.appendChild(e);}).catch(function(){});})();
 </script>
 </body>
 </html>
