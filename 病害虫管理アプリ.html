@@ -713,6 +713,7 @@ body { display: flex; flex-direction: column; }
   min-height: 34px; display: flex; align-items: center;
 }
 .otab.active { color: #fff; border-color: rgba(255,255,255,0.8); background: rgba(255,255,255,0.18); }
+#app-version { margin-left: auto; align-self: center; color: #fff; font-size: 11px; font-weight: 600; opacity: 0.9; white-space: nowrap; padding-left: 10px; flex-shrink: 0; }
 
 /* メインエリア（地図が全面） */
 #main { position: relative; flex: 1; overflow: hidden; }
@@ -979,7 +980,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
   <button onclick="clearCompare()" style="padding:6px 12px;border-radius:6px;border:none;background:#4a1a1a;color:#f88;font-size:12px;cursor:pointer;min-height:34px">✕ 解除</button>
 </div>
 
-<div id="orchard-bar"><div id="otabs"></div></div>
+<div id="orchard-bar"><div id="otabs"></div><span id="app-version"></span></div>
 
 <div id="main">
   <div id="map"></div>
@@ -1955,8 +1956,14 @@ function ageCategory(age) {
 }
 // 木の区分（縮伐木は手動指定・三角形アイコン）
 function treeCat(t) {
-  if (t && t.shrink) return { label:'縮伐木', factor:0.8, shape:'tri' };
-  const info = ageCategory(treeAgeAt(t, curYear));
+  const age = treeAgeAt(t, curYear);
+  const info = ageCategory(age);
+  if (t && t.shrink) {
+    // 樹齢未入力の縮伐木は老木サイズ扱い（縮伐対象は大抵古い木のため）
+    const base = (age == null || isNaN(age)) ? 1.3 : info.factor;
+    // 三角は同じ枠でも面積が円の約6割で小さく見えるため 1.15倍で見た目を揃える
+    return { label:'縮伐木', factor: base * 1.15, shape:'tri' };
+  }
   return { label:info.label, factor:info.factor, shape:'circle' };
 }
 
@@ -2097,7 +2104,7 @@ function cycleTaskSt(tId, task) {
   if (!t.tasks[curYear][task]) t.tasks[curYear][task] = {};
   t.tasks[curYear][task].st = next;
   if (next === 'done' && !t.tasks[curYear][task].date) {
-    t.tasks[curYear][task].date = new Date().toISOString().slice(0,10);
+    t.tasks[curYear][task].date = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
   }
   if (next === 'todo') t.tasks[curYear][task].date = '';
   refreshMarker(tId);
@@ -2120,7 +2127,7 @@ function setTaskSt(tId, task, st) {
   if (!t.tasks[curYear][task]) t.tasks[curYear][task] = {};
   t.tasks[curYear][task].st = st;
   if (st === 'done' && !t.tasks[curYear][task].date) {
-    t.tasks[curYear][task].date = new Date().toISOString().slice(0,10);
+    t.tasks[curYear][task].date = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
   }
   renderTaskChecks(t); refreshMarker(tId); updateStats(); renderList();
 }
@@ -2658,7 +2665,7 @@ function initComparePanel() {
   document.getElementById('cmp-year-b').innerHTML = yearOpts;
   document.getElementById('cmp-year-a').value = compareState.yearA;
   document.getElementById('cmp-year-b').value = compareState.yearB;
-  if (!compareState.date) compareState.date = new Date().toISOString().slice(0,10);
+  if (!compareState.date) compareState.date = new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
   document.getElementById('cmp-date').value = compareState.date;
   if (compareState.task) applyCompare();
 }
@@ -2869,7 +2876,7 @@ function addTreeAtGps() {
 function saveData() {
   const data = {orchards,zones,trees,nid,issues,lines,facilities};
   const json = JSON.stringify(data, null, 2);
-  const fname = `kajiwara_${new Date().toISOString().slice(0,10)}.json`;
+  const fname = `kajiwara_${new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)}.json`;
   try {
     // iOS Safari: navigator.share でファイル共有
     if (navigator.share) {
@@ -3009,7 +3016,7 @@ function removeIssueMarker(id){ if(issueMap[id]){try{map.removeLayer(issueMap[id
 function placeIssue(lat,lng){
   pushUndo();
   const iss={ id:'i'+Date.now()+Math.floor(Math.random()*1000), oid:curOid, lat, lng,
-    kind:'pest', name:'', date:new Date().toISOString().slice(0,10), severity:'中', status:'active', memo:'' };
+    kind:'pest', name:'', date:new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10), severity:'中', status:'active', memo:'' };
   issues.push(iss); addIssueMarker(iss);
   openIssueModal(iss.id);
 }
@@ -3021,7 +3028,7 @@ function openIssueModal(id){
   refreshIssueMarker(id);
   issueDraft={ kind:i.kind, severity:i.severity, status:i.status };
   document.getElementById('im-name').value=i.name||'';
-  document.getElementById('im-date').value=i.date||new Date().toISOString().slice(0,10);
+  document.getElementById('im-date').value=i.date||new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
   document.getElementById('im-memo').value=i.memo||'';
   applyIssueKindUI(); applyIssueSevUI(); applyIssueStatusUI(); renderIssueNameSuggest();
   document.getElementById('issue-modal').style.display='flex';
@@ -3153,7 +3160,7 @@ initFirebase();
 </script>
 <script>
 /* アプリバージョン表示 */
-(function(){fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var v=d&&(d.v||d.version);if(!v)return;var e=document.createElement('div');e.textContent='v'+v;e.style.cssText='position:fixed;right:5px;bottom:4px;z-index:99999;font-size:9px;color:#888;background:rgba(255,255,255,0.55);padding:1px 6px;border-radius:7px;pointer-events:none;font-family:sans-serif;';document.body.appendChild(e);}).catch(function(){});})();
+(function(){fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var v=d&&(d.v||d.version);if(!v)return;var tag=document.getElementById('app-version');if(tag){tag.textContent='v'+v;return;}var e=document.createElement('div');e.textContent='v'+v;e.style.cssText='position:fixed;right:5px;bottom:4px;z-index:99999;font-size:9px;color:#888;background:rgba(255,255,255,0.55);padding:1px 6px;border-radius:7px;pointer-events:none;font-family:sans-serif;';document.body.appendChild(e);}).catch(function(){});})();
 </script>
 </body>
 </html>
