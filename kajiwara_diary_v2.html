@@ -578,8 +578,8 @@ const FIREBASE_CONFIG = {
 <body>
 
 <header>
-  <h1>🍐 梶原果樹園 作業日誌</h1>
-  <div class="sub">荒尾市 ― 10年日記</div>
+  <h1>🍐 梶原果樹園 作業日誌 <span id="sync-dot" style="font-size:0.62rem;padding:3px 9px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;vertical-align:middle;">接続中…</span></h1>
+  <div class="sub">荒尾市 ― 10年日記（家族で共有）</div>
 </header>
 
 <div class="tabs">
@@ -820,13 +820,14 @@ const FIREBASE_CONFIG = {
   </div>
 
   <div class="card" style="border-color:#2d5016;">
-    <div class="card-title" style="color:#2d5016;">☁️ Googleスプレッドシートへ全データ送信</div>
+    <div class="card-title" style="color:#2d5016;">☁️ 家族で共有（クラウド同期）</div>
     <div style="font-size:0.78rem;color:var(--text-light);line-height:1.8;margin-bottom:12px;">
-      このアプリのデータをまとめてGoogleスプレッドシートに送信します。<br>
-      初回セットアップ後や、スマホ↔PC間でデータを揃えたいときに使います。
+      作業日誌（天候・気温・作業・メモ・満開日）は自動でクラウド保存され、家族の端末・PC・iPhoneすべてで同じ最新データが見られます。<br>
+      <b>この端末のデータを「基準」にしたいとき</b>だけ、下のボタンを押してクラウドへ上書きしてください（最初の1回だけでOK）。<br>
+      <span style="color:#c0392b;">※写真は容量が大きいため共有されず、端末内に保存されます。</span>
     </div>
-    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAllToSheet()">
-      📤 全データをスプレッドシートに送信する
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;background:#c75b00;" onclick="diaryForceUpload()">
+      📥 この端末のデータを基準にする（クラウドへ上書き）
     </button>
   </div>
 </div>
@@ -1070,7 +1071,56 @@ function initLaborLink(){
       const d=document.getElementById('rec-date');
       if(d && d.value) updateLaborInfo(d.value);
     });
+    initDiarySync();
   }catch(e){ console.error(e); }
+}
+
+// ===== 作業日誌の家族共有（クラウド同期） =====
+const DSYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false, cloudInit:false };
+let diaryRef=null, dLastJSON=null;
+function diaryBloom(){ try{ return JSON.parse(localStorage.getItem('kajiwara_bloom_dates')||'{}'); }catch(e){ return {}; } }
+function diarySnapshot(){ return JSON.stringify({records, bloom:diaryBloom()}); }
+function setDiaryDot(t,c){ const el=document.getElementById('sync-dot'); if(el){ el.textContent=t; el.style.background=c; } }
+function diaryPush(){
+  if(!DSYNC.ready||DSYNC.applying||!diaryRef||!DSYNC.cloudInit)return;
+  const cur=diarySnapshot(); if(cur===dLastJSON)return; dLastJSON=cur;
+  setDiaryDot('保存中…','#e09020');
+  diaryRef.set({records, bloom:diaryBloom(), writer:DSYNC.id, updatedAt:Date.now()})
+    .then(()=>setDiaryDot('同期済 ✓','#3a8a2a'))
+    .catch(e=>{ setDiaryDot('保存失敗','#c0392b'); console.error(e); dLastJSON=null; });
+}
+function diaryApply(d){
+  DSYNC.applying=true;
+  records = (d.records && typeof d.records==='object') ? d.records : {};
+  saveAll();
+  if(d.bloom && typeof d.bloom==='object'){ localStorage.setItem('kajiwara_bloom_dates', JSON.stringify(d.bloom)); }
+  try{ buildYearFilter(); }catch(e){}
+  const dt=document.getElementById('rec-date'); if(dt&&dt.value){ try{ loadRecordToForm(dt.value); }catch(e){} }
+  dLastJSON=diarySnapshot();
+  DSYNC.applying=false;
+}
+function diaryForceUpload(){
+  if(!diaryRef){ alert('まだ接続中です。数秒待って再度お試しください'); return; }
+  if(!confirm('この端末の作業日誌データを「基準」としてクラウドに上書きします（クラウド上の他のデータは置き換わります）。よろしいですか？')) return;
+  DSYNC.ready=true; DSYNC.cloudInit=true; dLastJSON=null;
+  diaryRef.set({records, bloom:diaryBloom(), writer:DSYNC.id, updatedAt:Date.now()})
+    .then(()=>{ dLastJSON=diarySnapshot(); setDiaryDot('同期済 ✓','#3a8a2a'); alert('✅ この端末の作業日誌をクラウドに反映しました。以降は全端末で自動共有されます。'); })
+    .catch(e=>{ alert('送信に失敗しました'); console.error(e); });
+}
+function initDiarySync(){
+  diaryRef = firebase.database().ref('kajiwara_diary_records');
+  firebase.database().ref('.info/connected').on('value', s=>{ if(s.val()===true){ if(DSYNC.ready) setDiaryDot('同期済 ✓','#3a8a2a'); } else setDiaryDot('オフライン','#888'); });
+  diaryRef.on('value', snap=>{
+    const d=snap.val();
+    if(!d){ DSYNC.ready=true; DSYNC.cloudInit=false; setDiaryDot('未共有','#b0883a'); return; }
+    DSYNC.ready=true; DSYNC.cloudInit=true;
+    if(d.writer===DSYNC.id){ setDiaryDot('同期済 ✓','#3a8a2a'); return; }
+    try{ diaryApply(d); }catch(e){ console.error(e); }
+    setDiaryDot('同期済 ✓','#3a8a2a');
+  }, err=>{ setDiaryDot('接続失敗','#c0392b'); console.error(err); });
+  setInterval(diaryPush, 2000);
+  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='hidden') diaryPush(); });
+  window.addEventListener('pagehide', diaryPush);
 }
 function updateLaborInfo(dateStr){
   const box=document.getElementById('labor-info'); if(!box) return;
@@ -1120,7 +1170,7 @@ function setDecadeToday() {
 }
 
 function toDateStr(d) {
-  return d.toISOString().slice(0,10);
+  return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);
 }
 
 // ========== タブ ==========
@@ -1185,7 +1235,9 @@ function loadRecordToForm(dateStr) {
     const today=toDateStr(new Date());
     if(dateStr && dateStr < today){
       const r0=records[dateStr];
-      if(!r0 || !r0.tempMax){ fetchJmaForDate(dateStr, true); }
+      // 既に気温データ（平均or最高）がある日は自動取得しない（CSV取込値を守る）
+      const hasTemp = r0 && ((r0.tempAvg!==undefined&&r0.tempAvg!=='')||(r0.tempMax!==undefined&&r0.tempMax!==''));
+      if(!hasTemp){ fetchJmaForDate(dateStr, true); }
     }
   }catch(e){}
   // 満開日（その年）と積算温度
@@ -1520,6 +1572,16 @@ function onBloomDateChange(){
 async function fetchJmaForDate(dateStr, auto){
   if(!dateStr){ if(!auto) alert('日付を選んでください'); return; }
   const status=document.getElementById('jma-status');
+  // 既存の気温データを守る：自動は上書きしない／手動は確認する
+  const exTmp=records[dateStr];
+  const hasTemp = exTmp && ((exTmp.tempAvg!==undefined&&exTmp.tempAvg!=='')||(exTmp.tempMax!==undefined&&exTmp.tempMax!==''));
+  if(hasTemp){
+    if(auto) return;  // 自動取得は既存データを上書きしない
+    if(!confirm('この日はすでに気温データがあります（CSV取込など）。\n気象庁の値で上書きしますか？\n※当日・直近は途中経過で不正確なことがあります。CSVの過去データの方が正確です。')){
+      if(status){ status.style.color='#1a6fa3'; status.textContent='上書きをキャンセルしました（既存データのまま）'; }
+      return;
+    }
+  }
   const ymd=dateStr.replace(/-/g,'');
   if(status && !auto){ status.style.color='#1a6fa3'; status.textContent='🌤️ 気象庁から取得中...'; }
   const hhs=['00','03','06','09','12','15','18','21'];

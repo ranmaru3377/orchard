@@ -1,9 +1,27 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
+<script>
+/* 自動更新チェック：最新版があれば自動で読み込み直す */
+(function(){try{var rv=new URLSearchParams(location.search).get('v');fetch('version.json?ts='+Date.now(),{cache:'no-store'}).then(function(r){return r.json();}).then(function(d){var sv=d&&(d.v||d.version);if(sv&&rv!==sv){location.replace(location.pathname+'?v='+encodeURIComponent(sv));}}).catch(function(){});}catch(e){}})();
+</script>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>梶原果樹園 花粉採取管理</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+<script>
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyAlRsl5eY2sI2kCrliwSK3H36cx8oWYKHA",
+  authDomain: "kajiwara-orchard.firebaseapp.com",
+  databaseURL: "https://kajiwara-orchard-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kajiwara-orchard",
+  storageBucket: "kajiwara-orchard.firebasestorage.app",
+  messagingSenderId: "1029372905399",
+  appId: "1:1029372905399:web:e8bc3efe1c2fdac4688a32"
+};
+const FIREBASE_PATH = "kajiwara_pollen";
+</script>
 <style>
 :root{--green:#2d5016;--green-mid:#5a8a3a;--green-pale:#eaf3e0;--border:#d5d5c8;--text:#333;--text-light:#888;--blue:#1565c0;--pink:#c2185b;--pink-pale:#fce4ec;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -60,7 +78,7 @@ input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px sol
 </head>
 <body>
 <header>
-  <h1>🌸 梶原果樹園 花粉採取管理</h1>
+  <h1>🌸 梶原果樹園 花粉採取管理 <span id="sync-dot" style="font-size:0.62rem;padding:3px 9px;border-radius:14px;background:#888;color:#fff;font-weight:700;white-space:nowrap;vertical-align:middle;">接続中…</span></h1>
   <div class="sub">荒尾市 ― 採花・在庫管理（枚数）</div>
 </header>
 
@@ -140,9 +158,9 @@ input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px sol
     <div id="stock-content"></div>
   </div>
   <div class="card">
-    <div class="card-title">☁️ Googleスプレッドシート送信</div>
-    <div class="note" style="margin-bottom:10px;">端末を替えてもデータが残るよう、Googleスプレッドシートに送信できます。</div>
-    <button class="btn-save" style="font-size:0.88rem;padding:12px;" onclick="syncAll()">📤 全データを送信</button>
+    <div class="card-title">☁️ 家族で共有（クラウド同期）</div>
+    <div class="note" style="margin-bottom:10px;">入力したデータは自動でクラウド保存され、家族の端末・PC・iPhoneすべてで同じ最新データが見られます。<br><b>この端末のデータを「基準」にしたいとき</b>だけ、下のボタンを押してクラウドへ上書きしてください（最初の1回だけでOK）。</div>
+    <button class="btn-save" style="font-size:0.88rem;padding:12px;background:#c75b00;" onclick="forceUploadLocal()">📥 この端末のデータを基準にする（クラウドへ上書き）</button>
     <div class="sync-status" id="sync-status2"></div>
   </div>
 </div>
@@ -185,7 +203,7 @@ function setMode(m){
   updateStockPreview();
 }
 
-function setToday(){document.getElementById('rec-date').value=new Date().toISOString().slice(0,10);}
+function setToday(){document.getElementById('rec-date').value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);}
 
 function showPage(name,e){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
@@ -257,7 +275,7 @@ function saveRecord(){
 }
 
 async function syncOne(rec){
-  if(!GAS_URL){setSync('sync-status','💾 端末に保存しました（シート未連携）');return;}
+  if(!GAS_URL){setSync('sync-status',(typeof SYNC!=='undefined'&&SYNC.cloudInit)?'☁️ 保存しました（家族と共有）':'💾 保存しました（共有は「基準にする」を一度実行）');return;}
   setSync('sync-status','📤 送信中...');
   try{
     await fetch(GAS_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/json'},body:JSON.stringify({sheet:'花粉',...rec})});
@@ -323,7 +341,57 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(rd)rd.addEventListener('change',updateStockPreview);
 });
 
+// ===== Firebase 家族共有 同期 =====
+const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false, cloudInit:false };
+let dataRef=null, lastJSON=null, syncTimer=null;
+function snapshotJSON(){ return JSON.stringify({ records }); }
+function setSyncDot(t,c){ const el=document.getElementById('sync-dot'); if(el){ el.textContent=t; el.style.background=c; } }
+function saveAllLocal(){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+}
+function reRenderAll(){ ['renderList','renderSummary','renderStock','renderNameBtns','renderSelectedFerts','renderFertSuggest','renderUsage'].forEach(function(fn){ try{ if(typeof window[fn]==='function') window[fn](); }catch(e){} }); }
+function pushIfChanged(){
+  if(!SYNC.ready||SYNC.applying||!dataRef||!SYNC.cloudInit)return;
+  const cur=snapshotJSON(); if(cur===lastJSON)return; lastJSON=cur;
+  setSyncDot('保存中…','#e09020');
+  dataRef.set({ records, writer:SYNC.id, updatedAt:Date.now() }).then(()=>setSyncDot('同期済 ✓','#3a8a2a')).catch(e=>{ setSyncDot('保存失敗','#c0392b'); console.error(e); lastJSON=null; });
+}
+function applyRemote(d){
+  SYNC.applying=true;
+  records=Array.isArray(d.records)?d.records:[];
+  saveAllLocal();
+  reRenderAll();
+  lastJSON=snapshotJSON();
+  SYNC.applying=false;
+}
+function forceUploadLocal(){
+  if(!dataRef){ alert('まだ接続中です。数秒待って再度お試しください'); return; }
+  if(!confirm('この端末のデータを「基準」としてクラウドに上書きします（クラウド上の他のデータは置き換わります）。よろしいですか？')) return;
+  SYNC.ready=true; SYNC.cloudInit=true; lastJSON=null;
+  dataRef.set({ records, writer:SYNC.id, updatedAt:Date.now() }).then(()=>{ lastJSON=snapshotJSON(); setSyncDot('同期済 ✓','#3a8a2a'); alert('✅ この端末のデータをクラウドに反映しました。以降は全端末で自動共有されます。'); }).catch(e=>{ alert('送信に失敗しました'); console.error(e); });
+}
+function initFirebase(){
+  if(typeof firebase==='undefined'){ setSyncDot('SDK失敗','#c0392b'); return; }
+  try{
+    firebase.initializeApp(FIREBASE_CONFIG);
+    dataRef=firebase.database().ref(FIREBASE_PATH);
+    firebase.database().ref('.info/connected').on('value',s=>{ if(s.val()===true){ if(SYNC.ready) setSyncDot('同期済 ✓','#3a8a2a'); } else setSyncDot('オフライン','#888'); });
+    dataRef.on('value',snap=>{
+      const d=snap.val();
+      if(!d){ SYNC.ready=true; SYNC.cloudInit=false; setSyncDot('未共有','#b0883a'); return; }
+      SYNC.ready=true; SYNC.cloudInit=true;
+      if(d.writer===SYNC.id){ setSyncDot('同期済 ✓','#3a8a2a'); return; }
+      try{ applyRemote(d); }catch(e){ console.error(e); }
+      setSyncDot('同期済 ✓','#3a8a2a');
+    }, err=>{ setSyncDot('接続失敗','#c0392b'); console.error(err); });
+  }catch(e){ setSyncDot('初期化失敗','#c0392b'); console.error(e); }
+}
+setInterval(pushIfChanged,2000);
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') pushIfChanged(); });
+window.addEventListener('pagehide',pushIfChanged);
+
 init();
+initFirebase();
 </script>
 </body>
 </html>
