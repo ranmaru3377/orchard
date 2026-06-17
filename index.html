@@ -945,11 +945,6 @@ const FIREBASE_PATH = "kajiwara_orchard";
   ">
     <option value="" style="background:#2a7020;color:#fff">— 作業を選ぶ —</option>
   </select>
-  <span id="task-pill-todo" class="pill" style="display:none">
-    <span id="pill-task-name" style="opacity:0.8;margin-right:3px;font-size:10px"></span>未 <span id="n-todo">0</span>
-  </span>
-  <span id="task-pill-wip"  class="pill" style="display:none;background:rgba(255,200,50,0.25)">中 <span id="n-wip">0</span></span>
-  <span id="task-pill-done" class="pill" style="display:none;background:rgba(100,220,100,0.25)">済 <span id="n-done">0</span></span>
   <button class="hbtn" id="hdr-menu-btn" onclick="toggleHdrMenu(event)" style="font-size:16px;line-height:1;padding:4px 9px;">⋯</button>
   <div id="hdr-menu" style="display:none;position:fixed;top:48px;right:8px;z-index:99999;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3);padding:6px;min-width:160px;">
     <button class="menu-item" id="btn-asof" onclick="toggleAsOf();closeHdrMenu()">📅 指定日の進捗</button>
@@ -2344,17 +2339,16 @@ function resetAllToTodo() {
   updateStats(); renderList();
 }
 function updateStats() {
+  // 未/中/済の数値表示は廃止（視覚的判断を優先）。集計表示が必要な箇所のみ更新。
   const task = document.getElementById('header-task')?.value || '';
   const cur = trees.filter(t=>t.oid===curOid);
-  ['todo','wip','done'].forEach(s => {
-    document.getElementById(`task-pill-${s}`).style.display = task ? 'flex' : 'none';
-  });
+  const set = (id,v)=>{ const el=document.getElementById(id); if(el) el.textContent=v; };
+  ['task-pill-todo','task-pill-wip','task-pill-done'].forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
   if (!task) return;
-  const nameEl = document.getElementById('pill-task-name');
-  if (nameEl) nameEl.textContent = task.substring(0,3);
-  document.getElementById('n-todo').textContent = cur.filter(t=>getTaskSt(t,curYear,task)==='todo').length;
-  document.getElementById('n-wip').textContent  = cur.filter(t=>getTaskSt(t,curYear,task)==='wip').length;
-  document.getElementById('n-done').textContent = cur.filter(t=>getTaskSt(t,curYear,task)==='done').length;
+  set('pill-task-name', task.substring(0,3));
+  set('n-todo', cur.filter(t=>getTaskSt(t,curYear,task)==='todo').length);
+  set('n-wip',  cur.filter(t=>getTaskSt(t,curYear,task)==='wip').length);
+  set('n-done', cur.filter(t=>getTaskSt(t,curYear,task)==='done').length);
 }
 
 // ==============================
