@@ -9,7 +9,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>梶原果樹園 スプリンクラー点検</title>
+<title>梶原果樹園 管理マップ</title>
 <style>
 /* required styles */
 
@@ -936,7 +936,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
 <body>
 
 <div id="header" style="position:relative;flex-wrap:nowrap;">
-  <h1 style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;">💧 スプリンクラー点検<span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.85;"></span></h1>
+  <h1 style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;">🍐 梶原果樹園<span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.85;"></span></h1>
   <select id="header-task" onchange="onHeaderTaskChange()" style="
     font-size:12px; padding:6px 8px; border-radius:8px;
     border:1px solid rgba(255,255,255,0.5);
@@ -951,7 +951,8 @@ const FIREBASE_PATH = "kajiwara_orchard";
   <span id="task-pill-wip"  class="pill" style="display:none;background:rgba(255,200,50,0.25)">中 <span id="n-wip">0</span></span>
   <span id="task-pill-done" class="pill" style="display:none;background:rgba(100,220,100,0.25)">済 <span id="n-done">0</span></span>
   <button class="hbtn" id="hdr-menu-btn" onclick="toggleHdrMenu(event)" style="font-size:16px;line-height:1;padding:4px 9px;">⋯</button>
-  <div id="hdr-menu" style="display:none;position:absolute;top:46px;right:8px;z-index:850;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3);padding:6px;min-width:160px;">
+  <div id="hdr-menu" style="display:none;position:fixed;top:48px;right:8px;z-index:99999;background:#fff;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,0.3);padding:6px;min-width:160px;">
+    <button class="menu-item" id="btn-asof" onclick="toggleAsOf();closeHdrMenu()">📅 指定日の進捗</button>
     <button class="menu-item" id="btn-compare" onclick="toggleCompare();closeHdrMenu()">📅 年比較</button>
     <button class="menu-item" id="btn-reset" onclick="resetAllToTodo();closeHdrMenu()">↺ 全て未着手に戻す</button>
     <button class="menu-item" onclick="saveData();closeHdrMenu()">💾 データ保存</button>
@@ -978,6 +979,18 @@ const FIREBASE_PATH = "kajiwara_orchard";
   </div>
   <div id="cmp-result" style="color:#7ada5a;font-size:11px;flex:1;min-width:100px"></div>
   <button onclick="clearCompare()" style="padding:6px 12px;border-radius:6px;border:none;background:#4a1a1a;color:#f88;font-size:12px;cursor:pointer;min-height:34px">✕ 解除</button>
+</div>
+
+<div id="asof-bar" style="display:none;background:#1a2a3a;color:#fff;padding:8px 12px;flex-shrink:0;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;border-bottom:2px solid #2a7ab0;z-index:700;">
+  <span style="font-weight:600;color:#7abaf0;white-space:nowrap">📅 指定日の進捗</span>
+  <span style="color:#adc">作業:</span>
+  <select id="asof-task" onchange="applyAsOf()" style="font-size:12px;padding:5px 7px;border-radius:6px;border:none;background:#2a4a6a;color:#fff;-webkit-appearance:none;"><option value="">— 選択 —</option></select>
+  <span style="color:#adc">日付:</span>
+  <button onclick="stepAsOf(-1)" title="前の日" style="padding:5px 10px;border:none;border-radius:6px;background:#2a4a6a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;min-height:34px;">‹</button>
+  <input type="date" id="asof-date-input" onchange="applyAsOf()" style="font-size:12px;padding:5px 7px;border-radius:6px;border:none;background:#2a4a6a;color:#fff;-webkit-appearance:none;">
+  <button onclick="stepAsOf(1)" title="次の日" style="padding:5px 10px;border:none;border-radius:6px;background:#2a4a6a;color:#fff;font-size:14px;font-weight:700;cursor:pointer;min-height:34px;">›</button>
+  <div id="asof-result" style="color:#7abaf0;font-size:11px;flex:1;min-width:100px"></div>
+  <button onclick="clearAsOf()" style="padding:6px 12px;border-radius:6px;border:none;background:#4a1a1a;color:#f88;font-size:12px;cursor:pointer;min-height:34px">✕ 解除</button>
 </div>
 
 <div id="orchard-bar"><div id="otabs"></div><span id="app-version"></span></div>
@@ -2001,7 +2014,13 @@ function makeIcon(t, sel) {
 
   const doneCount = TASKS.filter(tk => getTaskSt(t, curYear, tk) === 'done').length;
   const headerTask = document.getElementById('header-task')?.value || '';
-  const displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : 'todo';  // 作業未選択時は全て未着手の見た目
+  let displaySt = headerTask ? getTaskSt(t, curYear, headerTask) : 'todo';  // 作業未選択時は全て未着手の見た目
+  // 指定日表示：その日までに完了していれば「済(緑)」、未完了は「未(灰)」
+  if (asOfDate && !compareMode && headerTask) {
+    const doneBy = isTaskDoneByDate(t, curYear, headerTask, asOfDate);
+    displaySt = doneBy ? 'done' : 'todo';
+    col = doneBy ? '#2e9e2e' : '#c7c5be';
+  }
   let inner = '', extra = '';
 
   if (displaySt === 'todo') {
@@ -2074,6 +2093,8 @@ function addMarker(t) {
     if (tool === 'facility') { placeFacility(t.lat, t.lng); return; }
     if (tool === 'move') return;   // 移動モード中はステータスを変えない
     if (APP_MODE !== 'map') return;  // 病害虫・点検アプリでは木は参照表示のみ
+    // 指定日表示中：タップでその日の「済／未」を切り替え（履歴の記入・修正）
+    if (asOfDate && !compareMode) { toggleAsOfDone(t.id); return; }
     setTool('select');
     const task = document.getElementById('header-task')?.value || '';
     if (task) {
@@ -2297,7 +2318,7 @@ function updateHdrDate(){
   const d=new Date(); const w=['日','月','火','水','木','金','土'][d.getDay()];
   const el=document.getElementById('hdr-date'); if(el) el.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+w+')';
 }
-function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); m.style.display=(m.style.display==='none'||!m.style.display)?'block':'none'; }
+function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); const show=(m.style.display==='none'||!m.style.display); if(show){ const b=document.getElementById('hdr-menu-btn'); if(b){ const r=b.getBoundingClientRect(); m.style.top=(r.bottom+4)+'px'; m.style.right=(window.innerWidth-r.right)+'px'; } } m.style.display=show?'block':'none'; }
 function closeHdrMenu(){ const m=document.getElementById('hdr-menu'); if(m)m.style.display='none'; }
 document.addEventListener('click',function(e){ const m=document.getElementById('hdr-menu'); const b=document.getElementById('hdr-menu-btn'); if(m&&m.style.display==='block'&&!m.contains(e.target)&&e.target!==b){ m.style.display='none'; } });
 function resetAllToTodo() {
@@ -2636,6 +2657,7 @@ function fitToHome(){
 let compareMode = false;
 let compareView = 'both';   // 'A'=今年 / 'B'=比較年 / 'both'=重ね
 let compareState = { task:'', date:'', yearA:new Date().getFullYear(), yearB:new Date().getFullYear()-1 };
+let asOfDate = null;   // 指定日表示（その日までの作業進捗）
 function setCompareView(v) {
   compareView = v;
   updateViewButtons();
@@ -2651,6 +2673,7 @@ function updateViewButtons() {
 }
 function toggleCompare() {
   compareMode = !compareMode;
+  if (compareMode && asOfDate) clearAsOf();  // 指定日表示とは排他
   const bar = document.getElementById('compare-bar');
   bar.classList.toggle('open', compareMode);
   document.getElementById('btn-compare').style.background =
@@ -2717,6 +2740,74 @@ function clearCompare() {
   document.getElementById('compare-bar').classList.remove('open');
   document.getElementById('btn-compare').style.background='';
   document.getElementById('cmp-result').textContent='';
+  trees.forEach(t=>refreshMarker(t.id));
+}
+
+// ===== 指定日の進捗表示 =====
+function toggleAsOf() {
+  const bar=document.getElementById('asof-bar');
+  const open = bar.style.display!=='flex';
+  if(open){
+    if(compareMode) clearCompare();  // 年比較とは排他
+    bar.style.display='flex';
+    // 作業の選択肢を用意（ヘッダーと同じ）＋ 現在のヘッダー作業を初期選択
+    const sel=document.getElementById('asof-task');
+    sel.innerHTML='<option value="">— 選択 —</option>'+TASKS.map(t=>`<option value="${t}">${t}</option>`).join('');
+    sel.value=document.getElementById('header-task').value||'';
+    const di=document.getElementById('asof-date-input');
+    if(!di.value) di.value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+    applyAsOf();
+  } else {
+    clearAsOf();
+  }
+}
+function applyAsOf() {
+  const task=document.getElementById('asof-task').value;
+  const date=document.getElementById('asof-date-input').value;
+  const res=document.getElementById('asof-result');
+  // ヘッダーの作業も合わせる（makeIconはヘッダー作業を見るため）
+  if(task){ const h=document.getElementById('header-task'); if(h && h.value!==task){ h.value=task; } }
+  if(!task || !date){ asOfDate=null; res.textContent='作業と日付を選んでください'; trees.forEach(t=>refreshMarker(t.id)); return; }
+  asOfDate=date;
+  trees.forEach(t=>refreshMarker(t.id));
+  // 集計
+  let done=0, total=trees.length;
+  trees.forEach(t=>{ if(isTaskDoneByDate(t,curYear,task,date)) done++; });
+  const [,m,d]=date.split('-');
+  const pct= total?Math.round(done/total*100):0;
+  res.innerHTML=`${+m}/${+d}時点：${task} 完了 <b>${done}/${total}</b>本（${pct}%）<span style="color:#9bd;font-size:10px;margin-left:6px;">／木をタップで済↔未を切替</span>`;
+}
+function stepAsOf(delta) {
+  const di=document.getElementById('asof-date-input');
+  let base = di.value ? new Date(di.value+'T00:00:00') : new Date();
+  base.setDate(base.getDate()+delta);
+  di.value = `${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}-${String(base.getDate()).padStart(2,'0')}`;
+  applyAsOf();
+}
+// 指定日表示中に木をタップ：その日時点の「済／未」を切り替え（履歴の記入・修正）
+function toggleAsOfDone(tId) {
+  const task=document.getElementById('asof-task').value;
+  if(!task || !asOfDate) return;
+  const t=trees.find(x=>x.id===tId); if(!t) return;
+  if(!t.tasks) t.tasks={};
+  if(!t.tasks[curYear]) t.tasks[curYear]={};
+  if(typeof pushUndo==='function') pushUndo();
+  const doneBy=isTaskDoneByDate(t,curYear,task,asOfDate);
+  if(doneBy){
+    // 解除：未着手に戻す
+    t.tasks[curYear][task]={st:'todo', date:''};
+  }else{
+    // この日に完了したことにする
+    t.tasks[curYear][task]={st:'done', date:asOfDate};
+  }
+  refreshMarker(tId);
+  updateStats(); renderList();   // 変更は自動でクラウド同期されます
+  applyAsOf();   // 集計を更新
+}
+function clearAsOf() {
+  asOfDate=null;
+  document.getElementById('asof-bar').style.display='none';
+  document.getElementById('asof-result').textContent='';
   trees.forEach(t=>refreshMarker(t.id));
 }
 
