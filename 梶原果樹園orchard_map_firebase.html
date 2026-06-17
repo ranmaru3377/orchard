@@ -936,7 +936,7 @@ const FIREBASE_PATH = "kajiwara_orchard";
 <body>
 
 <div id="header" style="position:relative;flex-wrap:nowrap;">
-  <h1 style="display:flex;align-items:baseline;gap:6px;white-space:nowrap;">🍐 梶原果樹園<span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.85;"></span></h1>
+  <h1 style="display:flex;align-items:center;gap:4px;white-space:nowrap;">🍐 梶原果樹園<button id="hdr-day-prev" onclick="stepHdrDate(-1)" title="前日" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:6px;width:24px;height:26px;font-size:14px;line-height:1;padding:0;cursor:pointer;margin-left:2px;">‹</button><span id="hdr-date" style="font-size:11px;font-weight:400;opacity:0.9;min-width:52px;text-align:center;"></span><button id="hdr-day-next" onclick="stepHdrDate(1)" title="翌日" style="background:rgba(255,255,255,0.18);border:1px solid rgba(255,255,255,0.5);color:#fff;border-radius:6px;width:24px;height:26px;font-size:14px;line-height:1;padding:0;cursor:pointer;">›</button></h1>
   <select id="header-task" onchange="onHeaderTaskChange()" style="
     font-size:12px; padding:6px 8px; border-radius:8px;
     border:1px solid rgba(255,255,255,0.5);
@@ -2310,10 +2310,22 @@ function onHeaderTaskChange() {
   updateStats(); trees.forEach(t => refreshMarker(t.id));
 }
 function updateHdrDate(){
-  const d=new Date(); const w=['日','月','火','水','木','金','土'][d.getDay()];
-  const el=document.getElementById('hdr-date'); if(el) el.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+w+')';
+  let d, asof=false;
+  if(typeof asOfDate!=='undefined' && asOfDate){ d=new Date(asOfDate+'T00:00:00'); asof=true; } else { d=new Date(); }
+  const w=['日','月','火','水','木','金','土'][d.getDay()];
+  const el=document.getElementById('hdr-date');
+  if(el){ el.textContent=(d.getMonth()+1)+'/'+d.getDate()+'('+w+')'; el.style.color=asof?'#ffd24a':''; el.style.fontWeight=asof?'700':'400'; }
 }
-function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); const show=(m.style.display==='none'||!m.style.display); if(show){ const b=document.getElementById('hdr-menu-btn'); if(b){ const r=b.getBoundingClientRect(); m.style.top=(r.bottom+4)+'px'; m.style.right=(window.innerWidth-r.right)+'px'; } } m.style.display=show?'block':'none'; }
+// 日付の前後ボタン：指定日（その日までの進捗）表示を1日ずつ移動。未開始なら開始。
+function stepHdrDate(delta){
+  const h=document.getElementById('header-task');
+  if(!h || !h.value){ alert('先に作業を選んでください'); return; }
+  const bar=document.getElementById('asof-bar');
+  if(bar.style.display!=='flex'){ toggleAsOf(); }  // 今日基準で指定日表示を開始
+  stepAsOf(delta);
+  updateHdrDate();
+}
+function toggleHdrMenu(e){ if(e)e.stopPropagation(); const m=document.getElementById('hdr-menu'); if(m.parentNode!==document.body) document.body.appendChild(m); const show=(m.style.display==='none'||!m.style.display); if(show){ const b=document.getElementById('hdr-menu-btn'); if(b){ const r=b.getBoundingClientRect(); m.style.top=(r.bottom+4)+'px'; m.style.right=(window.innerWidth-r.right)+'px'; } } m.style.display=show?'block':'none'; }
 function closeHdrMenu(){ const m=document.getElementById('hdr-menu'); if(m)m.style.display='none'; }
 document.addEventListener('click',function(e){ const m=document.getElementById('hdr-menu'); const b=document.getElementById('hdr-menu-btn'); if(m&&m.style.display==='block'&&!m.contains(e.target)&&e.target!==b){ m.style.display='none'; } });
 function resetAllToTodo() {
@@ -2761,8 +2773,9 @@ function applyAsOf() {
   const res=document.getElementById('asof-result');
   // ヘッダーの作業も合わせる（makeIconはヘッダー作業を見るため）
   if(task){ const h=document.getElementById('header-task'); if(h && h.value!==task){ h.value=task; } }
-  if(!task || !date){ asOfDate=null; res.textContent='作業と日付を選んでください'; trees.forEach(t=>refreshMarker(t.id)); return; }
+  if(!task || !date){ asOfDate=null; res.textContent='作業と日付を選んでください'; updateHdrDate(); trees.forEach(t=>refreshMarker(t.id)); return; }
   asOfDate=date;
+  updateHdrDate();
   trees.forEach(t=>refreshMarker(t.id));
   // 集計
   let done=0, total=trees.length;
@@ -2802,6 +2815,7 @@ function clearAsOf() {
   asOfDate=null;
   document.getElementById('asof-bar').style.display='none';
   document.getElementById('asof-result').textContent='';
+  updateHdrDate();
   trees.forEach(t=>refreshMarker(t.id));
 }
 
