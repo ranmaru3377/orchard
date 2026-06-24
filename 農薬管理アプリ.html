@@ -214,13 +214,14 @@ function render(){
     const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);
     return (ca<0?99:ca)-(cb<0?99:cb)
       || (a.sub||'').localeCompare(b.sub||'')
-      || (a.name||'').localeCompare(b.name||'');
+      || (a.name||'').localeCompare(b.name||'')
+      || (a.cap||'').localeCompare(b.cap||'');
   });
   const subList=[...new Set([...subs, ...materials.map(m=>m.sub).filter(Boolean)])];
   let stockValTotal=0;
   let h='<datalist id="sub-list">'+subList.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
   h+='<table><tr>'
-    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>系統</th><th>単位</th>'
+    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>容量</th><th>系統</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
     +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
     +`<th class="ty">単価(円)</th><th class="ty">在庫金額</th>`
@@ -238,6 +239,7 @@ function render(){
       <td><select onchange="setField('${it.id}','cat',this.value)">${catOpts(it.cat)}</select></td>
       <td><input type="text" list="sub-list" style="width:78px;" value="${esc(it.sub)}" onchange="setField('${it.id}','sub',this.value)"></td>
       <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
+      <td><input type="text" style="width:64px;text-align:center;" value="${esc(it.cap)}" placeholder="例:250g" onchange="setField('${it.id}','cap',this.value)"></td>
       <td><input type="text" style="width:52px;text-align:center;" value="${esc(it.frac)}" placeholder="FRAC" onchange="setField('${it.id}','frac',this.value)"></td>
       <td><input type="text" class="cell-unit" value="${esc(it.unit)}" onchange="setField('${it.id}','unit',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.s||0}" onchange="setYear('${it.id}',${py},'s',this.value)"></td>
@@ -252,10 +254,10 @@ function render(){
       <td class="calc">${stockVal?'¥'+Math.round(stockVal).toLocaleString():'-'}</td>
       <td class="sug">${fmt(suggest)}</td>
       <td><input type="number" class="cell" value="${plan!=null?plan:''}" placeholder="${fmt(suggest)}" onchange="setPlan('${it.id}',${y},this.value)"></td>
-      <td><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
+      <td style="white-space:nowrap;"><span title="この農薬の容量違いを追加" style="color:#2d7a2d;cursor:pointer;font-size:0.74rem;margin-right:8px;" onclick="addCapVariant('${it.id}')">＋容量</span><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
     </tr>`;
   });
-  h+=`<tr class="sumrow"><td colspan="14" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
+  h+=`<tr class="sumrow"><td colspan="15" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
   h+='</table>';
   wrap.innerHTML=h;
 }
@@ -267,7 +269,9 @@ function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return;
 function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
 function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
 function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この農薬')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
-function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',frac:'',unit:'',years:{},plan:{}}); persist(); render(); }
+function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',cap:'',frac:'',unit:'',years:{},plan:{}}); persist(); render(); }
+// 同じ農薬の容量違いを横に追加（名前・分類を引き継ぎ、容量だけ変えて使う）
+function addCapVariant(id){ const it=materials.find(x=>x.id===id); if(!it)return; materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:it.cat,sub:it.sub,name:it.name,cap:'',frac:it.frac||'',unit:it.unit||'',years:{},plan:{}}); persist(); render(); }
 
 function carryAll(){
   const y=curYear(), py=y-1;
@@ -308,7 +312,9 @@ function importPrices(){
     const price=parseFloat(parts[parts.length-1].replace(/[^\d.]/g,''));
     const name=parts.slice(0,parts.length-1).join(' ').trim();
     if(isNaN(price))return;
-    const it=materials.find(m=>(m.name||'').trim()===name);
+    // 名前一致／なければ「名前＋容量」一致（容量違いを指定したいとき例:ストロビー250g）
+    let it=materials.find(m=>(m.name||'').trim()===name);
+    if(!it) it=materials.find(m=>((m.name||'')+(m.cap||'')).trim()===name||((m.name||'')+' '+(m.cap||'')).trim()===name);
     if(it){ ydOf(it,y).p=price; updated++; } else { notfound.push(name); }
   });
   persist(); render();
