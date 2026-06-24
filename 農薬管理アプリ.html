@@ -108,6 +108,18 @@ td.sug{background:#fff7e6;color:#9a5a00;text-align:right;font-weight:700;}
     <input type="number" id="order-year" style="width:84px;" onchange="renderOrder()">
     <button class="btn" onclick="copySuggestAll()">目安を発注予定に一括コピー</button>
   </div>
+  <div class="card" style="background:#f0f7ea;border-color:#bcd9a8;">
+    <div style="font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:8px;">💧 希釈量から必要数を計算</div>
+    <div class="bar" style="margin-bottom:6px;">
+      <label style="font-size:0.8rem;color:var(--text-light);">基準散布量</label>
+      <input type="number" id="calc-vol" value="4800" style="width:78px;" onchange="renderCalc()"> L
+      <label style="font-size:0.8rem;color:var(--text-light);">×</label>
+      <input type="number" id="calc-rounds" value="1" style="width:50px;" onchange="renderCalc()"> 回
+    </div>
+    <div class="note" style="margin-bottom:8px;">600L×8台＝4800Lを基準に、希釈倍数と容量から1回（×回数）に必要な薬量・本数を計算し、<b>現在庫＋発注済</b>を差し引いた発注必要数を表示します。（希釈倍数・容量が未入力の農薬は計算されません）</div>
+    <div id="calc-content"></div>
+    <button class="btn solid" style="width:100%;margin-top:8px;" onclick="copyCalcToPlan()">この発注必要数を発注予定に反映</button>
+  </div>
   <div class="note" style="margin-bottom:8px;">発注予定（手入力）が1以上の農薬を一覧表示します。発注の控えにお使いください。</div>
   <div id="order-content"></div>
 </div>
@@ -221,7 +233,7 @@ function render(){
   let stockValTotal=0;
   let h='<datalist id="sub-list">'+subList.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
   h+='<table><tr>'
-    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>容量</th><th>系統</th><th>単位</th>'
+    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>容量</th><th>系統</th><th>希釈</th><th>収穫前</th><th>回数</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
     +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
     +`<th class="ty">単価(円)</th><th class="ty">在庫金額</th>`
@@ -241,6 +253,9 @@ function render(){
       <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
       <td><input type="text" style="width:64px;text-align:center;" value="${esc(it.cap)}" placeholder="例:250g" onchange="setField('${it.id}','cap',this.value)"></td>
       <td><input type="text" style="width:52px;text-align:center;" value="${esc(it.frac)}" placeholder="FRAC" onchange="setField('${it.id}','frac',this.value)"></td>
+      <td><input type="text" style="width:66px;text-align:center;" value="${esc(it.dil)}" placeholder="例:3000倍" onchange="setField('${it.id}','dil',this.value)"></td>
+      <td><input type="text" style="width:60px;text-align:center;" value="${esc(it.phi)}" placeholder="例:前日" onchange="setField('${it.id}','phi',this.value)"></td>
+      <td><input type="text" style="width:48px;text-align:center;" value="${esc(it.maxuse)}" placeholder="例:3" onchange="setField('${it.id}','maxuse',this.value)"></td>
       <td><input type="text" class="cell-unit" value="${esc(it.unit)}" onchange="setField('${it.id}','unit',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.s||0}" onchange="setYear('${it.id}',${py},'s',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.o||0}" onchange="setYear('${it.id}',${py},'o',this.value)"></td>
@@ -257,7 +272,7 @@ function render(){
       <td style="white-space:nowrap;"><span title="この農薬の容量違いを追加" style="color:#2d7a2d;cursor:pointer;font-size:0.74rem;margin-right:8px;" onclick="addCapVariant('${it.id}')">＋容量</span><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
     </tr>`;
   });
-  h+=`<tr class="sumrow"><td colspan="15" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
+  h+=`<tr class="sumrow"><td colspan="18" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
   h+='</table>';
   wrap.innerHTML=h;
 }
@@ -269,9 +284,9 @@ function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return;
 function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
 function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
 function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この農薬')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
-function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',cap:'',frac:'',unit:'',years:{},plan:{}}); persist(); render(); }
-// 同じ農薬の容量違いを横に追加（名前・分類を引き継ぎ、容量だけ変えて使う）
-function addCapVariant(id){ const it=materials.find(x=>x.id===id); if(!it)return; materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:it.cat,sub:it.sub,name:it.name,cap:'',frac:it.frac||'',unit:it.unit||'',years:{},plan:{}}); persist(); render(); }
+function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',cap:'',frac:'',dil:'',phi:'',maxuse:'',unit:'',years:{},plan:{}}); persist(); render(); }
+// 同じ農薬の容量違いを横に追加（名前・分類・登録情報を引き継ぎ、容量だけ変えて使う）
+function addCapVariant(id){ const it=materials.find(x=>x.id===id); if(!it)return; materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:it.cat,sub:it.sub,name:it.name,cap:'',frac:it.frac||'',dil:it.dil||'',phi:it.phi||'',maxuse:it.maxuse||'',unit:it.unit||'',years:{},plan:{}}); persist(); render(); }
 
 function carryAll(){
   const y=curYear(), py=y-1;
@@ -322,6 +337,39 @@ function importPrices(){
   alert('✅ '+updated+'件の単価を更新しました'+(notfound.length?`\n（名前が一致せず未更新：${notfound.join('、')}）`:''));
 }
 
+// ===== 希釈量からの必要数計算（600L×8台＝4800L 基準）=====
+function parseDil(s){ const n=parseFloat(String(s||'').replace(/[^\d.]/g,'')); return n>0?n:0; }
+function capUnitType(s){ const u=String(s||'').replace(/[\d.\s]/g,'').toLowerCase(); if(u.includes('ml')||u.includes('cc'))return 'vol'; if(u.includes('kg')||u.includes('g'))return 'wt'; if(u.includes('ℓ')||u.includes('l')||u.includes('リットル'))return 'vol'; return 'wt'; }
+function parseCapBase(s){ const str=String(s||''); const n=parseFloat(str.replace(/[^\d.]/g,'')); if(!(n>0))return 0; const u=str.replace(/[\d.\s]/g,'').toLowerCase(); if(u.includes('kg')||u.includes('㎏'))return n*1000; if(!u.includes('ml')&&(u.includes('ℓ')||u.includes('l')||u.includes('リットル')))return n*1000; return n; }
+function calcParams(){ const v=parseFloat((document.getElementById('calc-vol')||{}).value)||4800; const r=parseFloat((document.getElementById('calc-rounds')||{}).value)||1; return {v,r}; }
+// 1回（×回数）に必要な薬量と本数。希釈倍数・容量が無ければ null
+function reqInfo(it){ const D=parseDil(it.dil), cap=parseCapBase(it.cap); if(!D||!cap)return null; const {v,r}=calcParams(); const needBase=(v*1000/D)*r; return {D,cap,needBase,containers:Math.ceil(needBase/cap)}; }
+function renderCalc(){
+  const y=parseInt((document.getElementById('order-year')||{}).value)||new Date().getFullYear();
+  const el=document.getElementById('calc-content'); if(!el)return;
+  const order=[...cats];
+  const list=materials.filter(it=>reqInfo(it)).sort((a,b)=>{const ca=order.indexOf(a.cat),cb=order.indexOf(b.cat);return (ca<0?99:ca)-(cb<0?99:cb)||(a.name||'').localeCompare(b.name||'')||(a.cap||'').localeCompare(b.cap||'');});
+  if(!list.length){ el.innerHTML='<div class="note">希釈倍数と容量が入力された農薬がありません。在庫表で入力してください。</div>'; return; }
+  let h='<div class="scroll"><table style="width:100%;"><tr><th>農薬</th><th>容量</th><th>希釈</th><th>必要量</th><th>必要本数</th><th>在庫+発注</th><th class="sug">発注必要</th></tr>';
+  list.forEach(it=>{
+    const info=reqInfo(it); const td=ydOf(it,y); const avail=num(td.e)+num(td.o); const need=Math.max(0,info.containers-avail);
+    const vol=capUnitType(it.cap)==='vol';
+    const amt=info.needBase>=1000?(Math.round(info.needBase/10)/100)+(vol?'L':'kg'):Math.round(info.needBase)+(vol?'mL':'g');
+    h+=`<tr><td style="text-align:left;">${esc(it.name)}</td><td>${esc(it.cap)}</td><td>${esc(it.dil)}</td><td class="calc">${amt}</td><td class="calc">${info.containers}</td><td class="calc">${fmt(avail)}</td><td class="sug">${need}</td></tr>`;
+  });
+  h+='</table></div>';
+  el.innerHTML=h;
+}
+function copyCalcToPlan(){
+  const y=parseInt((document.getElementById('order-year')||{}).value)||new Date().getFullYear();
+  const list=materials.filter(it=>reqInfo(it)); if(!list.length){alert('計算対象（希釈・容量入力済）の農薬がありません');return;}
+  if(!confirm('希釈量からの発注必要数を、'+y+'年の発注予定に反映しますか？\n（既存の発注予定は上書きされます）'))return;
+  let n=0;
+  list.forEach(it=>{ const info=reqInfo(it); const td=ydOf(it,y); const avail=num(td.e)+num(td.o); const need=Math.max(0,info.containers-avail); if(!it.plan)it.plan={}; it.plan[y]=need; n++; });
+  persist(); renderOrder(); render();
+  alert('✅ '+n+'件の発注必要数を発注予定に反映しました。');
+}
+
 // ===== 発注リスト =====
 function copySuggestAll(){
   const y=parseInt(document.getElementById('order-year').value)||new Date().getFullYear();
@@ -334,6 +382,7 @@ function copySuggestAll(){
   persist(); renderOrder(); render();
 }
 function renderOrder(){
+  renderCalc();
   const y=parseInt(document.getElementById('order-year').value)||new Date().getFullYear();
   const el=document.getElementById('order-content');
   const list=materials.filter(it=>planOf(it,y)>0);

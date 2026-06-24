@@ -307,15 +307,16 @@ function renderSuggest(){
   // 農薬在庫アプリで登録した農薬も候補に追加（同名は系統だけ補完）
   inventoryCandidates().forEach(inv=>{
     const ex=cand.find(m=>m.name===inv.name);
-    if(ex){ if(!ex.frac&&inv.frac)ex.frac=inv.frac; }
-    else cand.push({name:inv.name,cat:inv.cat,frac:inv.frac,_inv:true});
+    if(ex){ if(!ex.frac&&inv.frac)ex.frac=inv.frac; ex.dil=ex.dil||inv.dil; ex.phi=inv.phi; ex.maxuse=inv.maxuse; }
+    else cand.push({name:inv.name,cat:inv.cat,frac:inv.frac,dil:inv.dil,phi:inv.phi,maxuse:inv.maxuse,_inv:true});
   });
   if(q)cand=cand.filter(m=>m.name.includes(q));
   // 未選択のものだけ
   cand=cand.filter(m=>!selChems.some(s=>s.name===m.name&&s.cat===m.cat));
   if(cand.length===0){c.innerHTML='';return;}
+  const ref=m=>{const a=[];if(m.dil)a.push('希釈'+m.dil);if(m.phi)a.push('収穫'+m.phi);if(m.maxuse)a.push('上限'+m.maxuse+'回');return a.length?`<span style="color:#9a5a00;font-size:0.62rem;margin-left:4px;">${a.join('／')}</span>`:'';};
   c.innerHTML=cand.slice(0,12).map((m,i)=>
-    `<span class="sg"><span class="sg-pick" data-act="pick" data-idx="${i}"><span class="sg-cat cat-badge ${m.cat}">${catLabel(m.cat)}</span>${m.name}${m.frac?`<span style="color:#777;font-size:0.7rem;margin-left:3px;">FRAC:${m.frac}</span>`:''}${m._inv?`<span style="color:#2d7a2d;font-size:0.62rem;margin-left:3px;">📦在庫</span>`:''}</span>${m._inv?'':`<span class="sg-del" data-act="del" data-idx="${i}">✕</span>`}</span>`
+    `<span class="sg"><span class="sg-pick" data-act="pick" data-idx="${i}"><span class="sg-cat cat-badge ${m.cat}">${catLabel(m.cat)}</span>${m.name}${m.frac?`<span style="color:#777;font-size:0.7rem;margin-left:3px;">FRAC:${m.frac}</span>`:''}${m._inv?`<span style="color:#2d7a2d;font-size:0.62rem;margin-left:3px;">📦在庫</span>`:''}${ref(m)}</span>${m._inv?'':`<span class="sg-del" data-act="del" data-idx="${i}">✕</span>`}</span>`
   ).join('');
   // イベント委譲で確実にクリックを拾う
   c._cand=cand.slice(0,12);
@@ -328,6 +329,7 @@ function renderSuggest(){
       if(el.getAttribute('data-act')==='pick'){
         document.getElementById('chem-input').value=m.name;
         if(m.frac)document.getElementById('chem-frac').value=m.frac;
+        if(m.dil&&!document.getElementById('chem-dil').value.trim())document.getElementById('chem-dil').value=m.dil;
         renderSuggest();
         addChemToMix();
       }else{
@@ -589,9 +591,15 @@ function renderUsage(){
       lastField=u.field;
     }
     const fracTag=u.frac?`<span style="color:#b8860b;font-weight:600;font-size:0.72rem;margin-left:4px;">FRAC:${u.frac}</span>`:'';
+    const inv=invInfo(u.name);
+    const lim=inv&&inv.maxuse?parseInt(String(inv.maxuse).replace(/[^\d]/g,'')):NaN;
+    const hasLim=!isNaN(lim);
+    const over=hasLim&&u.count>lim, reach=hasLim&&u.count===lim;
+    const cntHtml=hasLim?`${u.count} / 上限${lim}回`:`${u.count}回`;
+    const phiTag=(inv&&inv.phi)?`　収穫${inv.phi}`:'';
     html+=`<div class="summary-row">
-      <div><div class="name"><span class="cat-badge ${u.cat}">${catLabel(u.cat)}</span>${u.name}${fracTag}</div><div class="detail">最終散布 ${+m}/${+d}</div></div>
-      <div class="v">${u.count}回</div>
+      <div><div class="name"><span class="cat-badge ${u.cat}">${catLabel(u.cat)}</span>${u.name}${fracTag}</div><div class="detail">最終散布 ${+m}/${+d}${phiTag}${over?'　<span style="color:#c0392b;font-weight:700;">⚠️上限超過</span>':(reach?'　<span style="color:#c0392b;">上限に到達</span>':'')}</div></div>
+      <div class="v" style="${over?'color:#c0392b;':''}">${cntHtml}</div>
     </div>`;
   });
   html+='</div>';
@@ -656,12 +664,14 @@ function invCatKeys(c){
   if(/葉面/.test(c||''))return ['foliar'];
   return ['fung','insc','stick','foliar'];
 }
-// 現在のタブ(curCat)で候補に出す在庫農薬 [{name,cat:curCat,frac}]
+// 現在のタブ(curCat)で候補に出す在庫農薬 [{name,cat:curCat,frac,dil,phi,maxuse}]
 function inventoryCandidates(){
   const out=[];
-  invMaterials.forEach(m=>{ if(m.name && invCatKeys(m.cat).includes(curCat)) out.push({name:m.name,cat:curCat,frac:m.frac||''}); });
+  invMaterials.forEach(m=>{ if(m.name && invCatKeys(m.cat).includes(curCat)) out.push({name:m.name,cat:curCat,frac:m.frac||'',dil:m.dil||'',phi:m.phi||'',maxuse:m.maxuse||''}); });
   return out;
 }
+// 名前から在庫の登録情報を引く
+function invInfo(name){ return invMaterials.find(m=>m.name===name)||null; }
 
 // ===== Firebase 家族共有 同期 =====
 const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false, cloudInit:false };
@@ -713,7 +723,7 @@ function initFirebase(){
     try{
       firebase.database().ref(INV_PATH).on('value',s=>{
         const d=s.val();
-        invMaterials=(d&&Array.isArray(d.materials))?d.materials.map(m=>({name:m.name,cat:m.cat,frac:m.frac||''})):[];
+        invMaterials=(d&&Array.isArray(d.materials))?d.materials.map(m=>({name:m.name,cat:m.cat,frac:m.frac||'',dil:m.dil||'',phi:m.phi||'',maxuse:m.maxuse||''})):[];
         renderSuggest();
       });
     }catch(e){ console.error('inv subscribe',e); }
