@@ -132,7 +132,7 @@ input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px sol
     </div>
     <div id="chem-suggest" class="chem-suggest"></div>
     <div class="add-chem-row" style="margin-top:8px;gap:6px;">
-      <input type="text" id="chem-frac" placeholder="系統(FRAC/IRAC 例:11)" autocomplete="off" style="flex:1;">
+      <input type="text" id="chem-frac" placeholder="系統 例:11 / 混合剤 M09・07" autocomplete="off" style="flex:1;">
       <input type="text" id="chem-dil" placeholder="希釈倍率（例：1000）" autocomplete="off" style="flex:1;">
     </div>
     <div class="selected-chems" id="selected-chems"></div>
@@ -235,6 +235,8 @@ const CATS=[
 function catLabel(k){const c=CATS.find(c=>c.key===k);return c?c.label:k;}
 // 薬剤の系統コード（FRAC/IRAC等）を解決：記録に保存されたもの→なければ薬剤記憶から
 function fracOf(ch){ if(ch&&ch.frac)return ch.frac; const m=chemMemory.find(m=>m.name===(ch&&ch.name)&&m.cat===(ch&&ch.cat)); return (m&&m.frac)||''; }
+// 混合剤の系統コードを分解（例 "M09・07" → ["M09","07"]）
+function splitFrac(s){ return String(s||'').split(/[\s,，、・･\/／|＋+]+/).map(x=>x.trim()).filter(Boolean); }
 
 let selFields=[], selAmount='', selWeather='', selWind='', selTime='';
 let curCat='fung';
@@ -386,7 +388,7 @@ function renderSelectedChems(){
   selChems.map((s,i)=>`
     <div class="chem-badge ${s.cat}">
       <span class="cb-name">${s.name}</span>
-      <span class="cb-dil" style="max-width:64px;"><input type="text" placeholder="系統" value="${s.frac||''}" oninput="setFrac(${i},this.value)"></span>
+      <span class="cb-dil" style="max-width:96px;"><input type="text" placeholder="系統" value="${s.frac||''}" oninput="setFrac(${i},this.value)"></span>
       <span class="cb-dil"><input type="text" placeholder="倍率" value="${s.dilution}" oninput="setDil(${i},this.value)"></span>
       <span class="cb-del" onclick="removeChem(${i})">✕</span>
     </div>`).join('');
@@ -616,14 +618,17 @@ function renderUsageFrac(){
   filtered.forEach(r=>{
     const fields=(r.field||'').split('・').filter(Boolean);
     (r.chems||[]).forEach(ch=>{
-      const frac=fracOf(ch)||'(系統未設定)';
-      fields.forEach(fld=>{
-        if(filterField&&fld!==filterField)return;
-        const key=fld+'|'+frac;
-        if(!map[key])map[key]={field:fld,frac,cat:ch.cat,count:0,lastDate:'',chems:{}};
-        map[key].count++;
-        map[key].chems[ch.name]=(map[key].chems[ch.name]||0)+1;
-        if(r.date>map[key].lastDate)map[key].lastDate=r.date;
+      const codes=splitFrac(fracOf(ch)); if(!codes.length)codes.push('(系統未設定)');
+      // 混合剤は各系統コードに1回ずつ計上
+      codes.forEach(frac=>{
+        fields.forEach(fld=>{
+          if(filterField&&fld!==filterField)return;
+          const key=fld+'|'+frac;
+          if(!map[key])map[key]={field:fld,frac,cat:ch.cat,count:0,lastDate:'',chems:{}};
+          map[key].count++;
+          map[key].chems[ch.name]=(map[key].chems[ch.name]||0)+1;
+          if(r.date>map[key].lastDate)map[key].lastDate=r.date;
+        });
       });
     });
   });
