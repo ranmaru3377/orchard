@@ -131,7 +131,8 @@ input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px sol
       <button class="btn-today" onclick="addChemToMix()">＋追加</button>
     </div>
     <div id="chem-suggest" class="chem-suggest"></div>
-    <div class="add-chem-row" style="margin-top:8px;">
+    <div class="add-chem-row" style="margin-top:8px;gap:6px;">
+      <input type="text" id="chem-frac" placeholder="系統(FRAC/IRAC 例:11)" autocomplete="off" style="flex:1;">
       <input type="text" id="chem-dil" placeholder="希釈倍率（例：1000）" autocomplete="off" style="flex:1;">
     </div>
     <div class="selected-chems" id="selected-chems"></div>
@@ -194,8 +195,12 @@ input[type=number],input[type=text]{width:100%;padding:9px 10px;border:1.5px sol
     </div>
   </div>
   <div class="card">
-    <div class="card-title">🔢 薬剤×園地 使用回数</div>
-    <div class="note" style="margin-bottom:8px;">混用に含まれた薬剤も1回としてカウントします。使用回数制限の確認にお使いください。</div>
+    <div class="card-title">🔢 使用回数</div>
+    <div class="cat-tabs" id="usage-mode-tabs" style="margin-bottom:8px;">
+      <button class="cat-tab active" id="umode-chem" onclick="setUsageMode('chem')">薬剤別</button>
+      <button class="cat-tab" id="umode-frac" onclick="setUsageMode('frac')">系統別(FRAC)</button>
+    </div>
+    <div class="note" id="usage-note" style="margin-bottom:8px;">混用に含まれた薬剤も1回としてカウントします。使用回数制限の確認にお使いください。</div>
     <div id="usage-content"></div>
   </div>
   <div class="card">
@@ -228,6 +233,8 @@ const CATS=[
   {key:'foliar',label:'葉面散布剤'}
 ];
 function catLabel(k){const c=CATS.find(c=>c.key===k);return c?c.label:k;}
+// 薬剤の系統コード（FRAC/IRAC等）を解決：記録に保存されたもの→なければ薬剤記憶から
+function fracOf(ch){ if(ch&&ch.frac)return ch.frac; const m=chemMemory.find(m=>m.name===(ch&&ch.name)&&m.cat===(ch&&ch.cat)); return (m&&m.frac)||''; }
 
 let selFields=[], selAmount='', selWeather='', selWind='', selTime='';
 let curCat='fung';
@@ -295,14 +302,20 @@ function renderCatTabs(){
 function renderSuggest(){
   const c=document.getElementById('chem-suggest');
   const q=document.getElementById('chem-input').value.trim();
-  // 現在の種別の薬剤記憶から、入力文字で絞り込み（未入力なら現種別の全候補）
-  let cand=chemMemory.filter(m=>m.cat===curCat);
+  // 現在の種別の薬剤記憶（自アプリで使った薬剤）
+  let cand=chemMemory.filter(m=>m.cat===curCat).map(m=>({name:m.name,cat:m.cat,frac:m.frac||'',_inv:false}));
+  // 農薬在庫アプリで登録した農薬も候補に追加（同名は系統だけ補完）
+  inventoryCandidates().forEach(inv=>{
+    const ex=cand.find(m=>m.name===inv.name);
+    if(ex){ if(!ex.frac&&inv.frac)ex.frac=inv.frac; }
+    else cand.push({name:inv.name,cat:inv.cat,frac:inv.frac,_inv:true});
+  });
   if(q)cand=cand.filter(m=>m.name.includes(q));
   // 未選択のものだけ
   cand=cand.filter(m=>!selChems.some(s=>s.name===m.name&&s.cat===m.cat));
   if(cand.length===0){c.innerHTML='';return;}
   c.innerHTML=cand.slice(0,12).map((m,i)=>
-    `<span class="sg"><span class="sg-pick" data-act="pick" data-idx="${i}"><span class="sg-cat cat-badge ${m.cat}">${catLabel(m.cat)}</span>${m.name}</span><span class="sg-del" data-act="del" data-idx="${i}">✕</span></span>`
+    `<span class="sg"><span class="sg-pick" data-act="pick" data-idx="${i}"><span class="sg-cat cat-badge ${m.cat}">${catLabel(m.cat)}</span>${m.name}${m.frac?`<span style="color:#777;font-size:0.7rem;margin-left:3px;">FRAC:${m.frac}</span>`:''}${m._inv?`<span style="color:#2d7a2d;font-size:0.62rem;margin-left:3px;">📦在庫</span>`:''}</span>${m._inv?'':`<span class="sg-del" data-act="del" data-idx="${i}">✕</span>`}</span>`
   ).join('');
   // イベント委譲で確実にクリックを拾う
   c._cand=cand.slice(0,12);
@@ -314,6 +327,7 @@ function renderSuggest(){
       if(!m)return;
       if(el.getAttribute('data-act')==='pick'){
         document.getElementById('chem-input').value=m.name;
+        if(m.frac)document.getElementById('chem-frac').value=m.frac;
         renderSuggest();
         addChemToMix();
       }else{
@@ -347,16 +361,18 @@ function addChemToMix(){
   const name=input.value.trim();
   if(!name)return;
   const dil=document.getElementById('chem-dil').value.trim();
+  const frac=document.getElementById('chem-frac').value.trim();
   // 重複チェック
   if(selChems.some(s=>s.name===name&&s.cat===curCat)){alert('この薬剤はもう追加されています');return;}
-  selChems.push({name,cat:curCat,dilution:dil});
-  // 記憶に追加（次回から候補に出る）
-  if(!chemMemory.some(m=>m.name===name&&m.cat===curCat)){
-    chemMemory.push({name,cat:curCat});
-    localStorage.setItem(CHEM_KEY,JSON.stringify(chemMemory));
-  }
+  selChems.push({name,cat:curCat,dilution:dil,frac});
+  // 記憶に追加／系統コードを更新（次回から候補・自動表示）
+  const mem=chemMemory.find(m=>m.name===name&&m.cat===curCat);
+  if(mem){ if(frac)mem.frac=frac; }
+  else chemMemory.push({name,cat:curCat,frac});
+  localStorage.setItem(CHEM_KEY,JSON.stringify(chemMemory));
   input.value='';
   document.getElementById('chem-dil').value='';
+  document.getElementById('chem-frac').value='';
   renderSuggest();
   renderSelectedChems();
 }
@@ -368,12 +384,14 @@ function renderSelectedChems(){
   selChems.map((s,i)=>`
     <div class="chem-badge ${s.cat}">
       <span class="cb-name">${s.name}</span>
+      <span class="cb-dil" style="max-width:64px;"><input type="text" placeholder="系統" value="${s.frac||''}" oninput="setFrac(${i},this.value)"></span>
       <span class="cb-dil"><input type="text" placeholder="倍率" value="${s.dilution}" oninput="setDil(${i},this.value)"></span>
       <span class="cb-del" onclick="removeChem(${i})">✕</span>
     </div>`).join('');
 }
 
 function setDil(i,val){if(selChems[i])selChems[i].dilution=val.trim();}
+function setFrac(i,val){ if(!selChems[i])return; const v=val.trim(); selChems[i].frac=v; const s=selChems[i]; const mem=chemMemory.find(m=>m.name===s.name&&m.cat===s.cat); if(mem){mem.frac=v; localStorage.setItem(CHEM_KEY,JSON.stringify(chemMemory));} }
 function removeChem(i){selChems.splice(i,1);renderSuggest();renderSelectedChems();}
 
 function setToday(){document.getElementById('rec-date').value=new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);}
@@ -394,7 +412,7 @@ function saveRecord(){
   if(selChems.length===0){alert('薬剤を選んでください');return;}
   const rec={
     id:editingId||Date.now(),date,field:selFields.join('・'),
-    chems:selChems.map(s=>({name:s.name,cat:s.cat,dilution:s.dilution})),
+    chems:selChems.map(s=>({name:s.name,cat:s.cat,dilution:s.dilution,frac:s.frac||''})),
     amount:selAmount,
     target:document.getElementById('target').value.trim(),
     weather:selWeather,wind:selWind,time:selTime,
@@ -448,15 +466,16 @@ function renderList(){
     // 種別ごと（殺菌→殺虫→展着→葉面の順）にまとめて1行で表示
     const catOrder=['fung','insc','stick','foliar'];
     const dilTxt=ch=>ch.dilution?`<span style="color:#888;font-weight:400">(${ch.dilution}${/[倍×]/.test(ch.dilution)?'':'倍'})</span>`:'';
+    const fracTxt=ch=>{const f=fracOf(ch);return f?`<span style="color:#b8860b;font-weight:600;font-size:0.72rem;margin-left:2px;">[${f}]</span>`:'';};
     let groups=catOrder.map(k=>{
       const items=(r.chems||[]).filter(c=>c.cat===k);
       if(!items.length)return '';
-      const names=items.map(c=>`<b>${c.name}</b>${dilTxt(c)}`).join('・');
+      const names=items.map(c=>`<b>${c.name}</b>${fracTxt(c)}${dilTxt(c)}`).join('・');
       return `<span class="cat-group"><span class="cat-badge ${k}">${catLabel(k)}</span>${names}</span>`;
     }).filter(Boolean);
     // 種別未設定の薬剤も拾う
     const others=(r.chems||[]).filter(c=>!catOrder.includes(c.cat));
-    if(others.length)groups.push(`<span class="cat-group">${others.map(c=>`<b>${c.name}</b>${dilTxt(c)}`).join('・')}</span>`);
+    if(others.length)groups.push(`<span class="cat-group">${others.map(c=>`<b>${c.name}</b>${fracTxt(c)}${dilTxt(c)}`).join('・')}</span>`);
     let chemHtml=`<div class="list-detail" style="line-height:2;margin-top:4px;">${groups.join('')}</div>`;
     let chips='';
     if(r.amount)chips+=`<span class="chip">${r.amount}L/反</span>`;
@@ -514,7 +533,7 @@ function editRec(id){
   document.querySelectorAll('#wind-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selWind));
   document.querySelectorAll('#time-btns .opt').forEach(b=>b.classList.toggle('selected',b.textContent===selTime));
   // 薬剤（混用）
-  selChems=(rec.chems||[]).map(ch=>({name:ch.name,cat:ch.cat,dilution:ch.dilution||''}));
+  selChems=(rec.chems||[]).map(ch=>({name:ch.name,cat:ch.cat,dilution:ch.dilution||'',frac:fracOf(ch)}));
   renderSuggest(); renderSelectedChems();
   // 対象病害虫・備考
   document.getElementById('target').value=rec.target||'';
@@ -526,7 +545,19 @@ function editRec(id){
   window.scrollTo({top:0,behavior:'smooth'});
 }
 
+let usageMode='chem';
+function setUsageMode(mode){
+  usageMode=mode;
+  document.getElementById('umode-chem').classList.toggle('active',mode==='chem');
+  document.getElementById('umode-frac').classList.toggle('active',mode==='frac');
+  const note=document.getElementById('usage-note');
+  if(note)note.textContent=(mode==='frac')
+    ?'同じ系統（FRAC/IRAC）の薬剤をまとめた散布回数です。系統別の使用回数制限（耐性管理）の確認にお使いください。'
+    :'混用に含まれた薬剤も1回としてカウントします。使用回数制限の確認にお使いください。';
+  renderUsage();
+}
 function renderUsage(){
+  if(usageMode==='frac')return renderUsageFrac();
   const yr=parseInt(document.getElementById('usage-year').value)||new Date().getFullYear();
   const filterField=document.getElementById('usage-field')?document.getElementById('usage-field').value:'';
   const el=document.getElementById('usage-content');
@@ -539,8 +570,9 @@ function renderUsage(){
       fields.forEach(fld=>{
         if(filterField&&fld!==filterField)return;
         const key=ch.name+'|'+fld;
-        if(!map[key])map[key]={name:ch.name,cat:ch.cat,field:fld,count:0,lastDate:''};
+        if(!map[key])map[key]={name:ch.name,cat:ch.cat,frac:fracOf(ch),field:fld,count:0,lastDate:''};
         map[key].count++;
+        if(!map[key].frac)map[key].frac=fracOf(ch);
         if(r.date>map[key].lastDate)map[key].lastDate=r.date;
       });
     });
@@ -556,8 +588,51 @@ function renderUsage(){
       html+=`<div style="margin-bottom:12px;"><div style="font-size:0.78rem;font-weight:700;color:var(--green);padding:6px 0 4px;border-bottom:1.5px solid var(--green-pale);">📍${u.field}</div>`;
       lastField=u.field;
     }
+    const fracTag=u.frac?`<span style="color:#b8860b;font-weight:600;font-size:0.72rem;margin-left:4px;">FRAC:${u.frac}</span>`:'';
     html+=`<div class="summary-row">
-      <div><div class="name"><span class="cat-badge ${u.cat}">${catLabel(u.cat)}</span>${u.name}</div><div class="detail">最終散布 ${+m}/${+d}</div></div>
+      <div><div class="name"><span class="cat-badge ${u.cat}">${catLabel(u.cat)}</span>${u.name}${fracTag}</div><div class="detail">最終散布 ${+m}/${+d}</div></div>
+      <div class="v">${u.count}回</div>
+    </div>`;
+  });
+  html+='</div>';
+  el.innerHTML=html;
+}
+// 系統（FRAC/IRAC）別の散布回数：同系列をまとめて集計
+function renderUsageFrac(){
+  const yr=parseInt(document.getElementById('usage-year').value)||new Date().getFullYear();
+  const filterField=document.getElementById('usage-field')?document.getElementById('usage-field').value:'';
+  const el=document.getElementById('usage-content');
+  const filtered=records.filter(r=>new Date(r.date).getFullYear()===yr);
+  if(filtered.length===0){el.innerHTML='<div class="empty">この年度の記録はありません</div>';return;}
+  const map={};
+  filtered.forEach(r=>{
+    const fields=(r.field||'').split('・').filter(Boolean);
+    (r.chems||[]).forEach(ch=>{
+      const frac=fracOf(ch)||'(系統未設定)';
+      fields.forEach(fld=>{
+        if(filterField&&fld!==filterField)return;
+        const key=fld+'|'+frac;
+        if(!map[key])map[key]={field:fld,frac,cat:ch.cat,count:0,lastDate:'',chems:{}};
+        map[key].count++;
+        map[key].chems[ch.name]=(map[key].chems[ch.name]||0)+1;
+        if(r.date>map[key].lastDate)map[key].lastDate=r.date;
+      });
+    });
+  });
+  const arr=Object.values(map).sort((a,b)=>a.field.localeCompare(b.field)||b.count-a.count||String(a.frac).localeCompare(String(b.frac)));
+  if(arr.length===0){el.innerHTML='<div class="empty">この園地の記録はありません</div>';return;}
+  let html='';let lastField='';
+  arr.forEach(u=>{
+    const[,m,d]=u.lastDate.split('-');
+    if(u.field!==lastField){
+      if(lastField!=='')html+='</div>';
+      html+=`<div style="margin-bottom:12px;"><div style="font-size:0.78rem;font-weight:700;color:var(--green);padding:6px 0 4px;border-bottom:1.5px solid var(--green-pale);">📍${u.field}</div>`;
+      lastField=u.field;
+    }
+    const chemList=Object.entries(u.chems).sort((a,b)=>b[1]-a[1]).map(([n,c])=>`${n}(${c})`).join('・');
+    const unset=u.frac==='(系統未設定)';
+    html+=`<div class="summary-row">
+      <div><div class="name"><span style="color:${unset?'#999':'#b8860b'};font-weight:700;">${unset?u.frac:'FRAC/IRAC '+u.frac}</span></div><div class="detail">${chemList}　／最終 ${+m}/${+d}</div></div>
       <div class="v">${u.count}回</div>
     </div>`;
   });
@@ -569,6 +644,24 @@ document.addEventListener('DOMContentLoaded',()=>{
   const uy=document.getElementById('usage-year');
   if(uy)uy.addEventListener('input',renderUsage);
 });
+
+// ===== 農薬在庫アプリ（農薬管理アプリ）で登録した農薬を候補に取り込む =====
+const INV_PATH='kajiwara_pesticides';   // 農薬在庫管理アプリと同じパス
+let invMaterials=[];   // [{name,cat(在庫アプリの分類),frac}]
+// 在庫アプリの分類 → 散布アプリのタブ(fung/insc/stick/foliar)。該当が無いものは全タブで候補表示。
+function invCatKeys(c){
+  if(c==='殺菌剤')return ['fung'];
+  if(c==='殺虫剤'||c==='殺ダニ剤')return ['insc'];
+  if(c==='展着剤')return ['stick'];
+  if(/葉面/.test(c||''))return ['foliar'];
+  return ['fung','insc','stick','foliar'];
+}
+// 現在のタブ(curCat)で候補に出す在庫農薬 [{name,cat:curCat,frac}]
+function inventoryCandidates(){
+  const out=[];
+  invMaterials.forEach(m=>{ if(m.name && invCatKeys(m.cat).includes(curCat)) out.push({name:m.name,cat:curCat,frac:m.frac||''}); });
+  return out;
+}
 
 // ===== Firebase 家族共有 同期 =====
 const SYNC={ id:Math.random().toString(36).slice(2), applying:false, ready:false, cloudInit:false };
@@ -616,6 +709,14 @@ function initFirebase(){
       try{ applyRemote(d); }catch(e){ console.error(e); }
       setSyncDot('同期済 ✓','#3a8a2a');
     }, err=>{ setSyncDot('接続失敗','#c0392b'); console.error(err); });
+    // 農薬在庫アプリの農薬リストを読み取り専用で購読（PCで登録→全端末の候補に反映）
+    try{
+      firebase.database().ref(INV_PATH).on('value',s=>{
+        const d=s.val();
+        invMaterials=(d&&Array.isArray(d.materials))?d.materials.map(m=>({name:m.name,cat:m.cat,frac:m.frac||''})):[];
+        renderSuggest();
+      });
+    }catch(e){ console.error('inv subscribe',e); }
   }catch(e){ setSyncDot('初期化失敗','#c0392b'); console.error(e); }
 }
 setInterval(pushIfChanged,2000);

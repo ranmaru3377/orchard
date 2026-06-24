@@ -220,7 +220,7 @@ function render(){
   let stockValTotal=0;
   let h='<datalist id="sub-list">'+subList.map(s=>`<option value="${esc(s)}">`).join('')+'</datalist>';
   h+='<table><tr>'
-    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>単位</th>'
+    +'<th>カテゴリ</th><th>サブ</th><th>農薬名</th><th>系統</th><th>単位</th>'
     +`<th class="py">期首</th><th class="py">発注</th><th class="py">期末</th><th class="py">使用量</th>`
     +`<th class="ty">期首</th><th class="ty">発注済</th><th class="ty">現在庫</th><th class="ty">使用量</th>`
     +`<th class="ty">単価(円)</th><th class="ty">在庫金額</th>`
@@ -238,6 +238,7 @@ function render(){
       <td><select onchange="setField('${it.id}','cat',this.value)">${catOpts(it.cat)}</select></td>
       <td><input type="text" list="sub-list" style="width:78px;" value="${esc(it.sub)}" onchange="setField('${it.id}','sub',this.value)"></td>
       <td><input type="text" class="cell-name" value="${esc(it.name)}" onchange="setField('${it.id}','name',this.value)"></td>
+      <td><input type="text" style="width:52px;text-align:center;" value="${esc(it.frac)}" placeholder="FRAC" onchange="setField('${it.id}','frac',this.value)"></td>
       <td><input type="text" class="cell-unit" value="${esc(it.unit)}" onchange="setField('${it.id}','unit',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.s||0}" onchange="setYear('${it.id}',${py},'s',this.value)"></td>
       <td><input type="number" class="cell" value="${pd.o||0}" onchange="setYear('${it.id}',${py},'o',this.value)"></td>
@@ -254,7 +255,7 @@ function render(){
       <td><span style="color:#ccc;cursor:pointer;" onclick="delItem('${it.id}')">✕</span></td>
     </tr>`;
   });
-  h+=`<tr class="sumrow"><td colspan="13" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
+  h+=`<tr class="sumrow"><td colspan="14" style="text-align:right;">${y}年 在庫金額合計（期末棚卸）</td><td class="calc" style="background:#fff7e6;color:#9a5a00;">¥${Math.round(stockValTotal).toLocaleString()}</td><td colspan="3"></td></tr>`;
   h+='</table>';
   wrap.innerHTML=h;
 }
@@ -266,7 +267,7 @@ function setField(id,f,v){ const it=materials.find(x=>x.id===id); if(!it)return;
 function setYear(id,y,k,v){ const it=materials.find(x=>x.id===id); if(!it)return; ydOf(it,y)[k]=num(v); persist(); render(); }
 function setPlan(id,y,v){ const it=materials.find(x=>x.id===id); if(!it)return; if(!it.plan)it.plan={}; it.plan[y]=num(v); persist(); render(); }
 function delItem(id){ const it=materials.find(x=>x.id===id); if(!it)return; if(!confirm('「'+(it.name||'この農薬')+'」を削除しますか？'))return; materials=materials.filter(x=>x.id!==id); persist(); render(); }
-function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',unit:'',years:{},plan:{}}); persist(); render(); }
+function addItem(){ materials.push({id:'m'+Date.now()+Math.floor(Math.random()*1000),cat:'',sub:'',name:'',frac:'',unit:'',years:{},plan:{}}); persist(); render(); }
 
 function carryAll(){
   const y=curYear(), py=y-1;
@@ -392,7 +393,7 @@ function delSub(i){
 
 function exportJson(){
   const data=JSON.stringify({materials,cats},null,2);
-  const fname='kajiwara_noyaku_'+new Date().toISOString().slice(0,10)+'.json';
+  const fname='kajiwara_noyaku_'+new Date(Date.now()-new Date().getTimezoneOffset()*60000).toISOString().slice(0,10)+'.json';
   try{ if(navigator.share){ const f=new File([data],fname,{type:'application/json'}); navigator.share({files:[f],title:'農薬データ'}).catch(()=>dl(data,fname)); } else dl(data,fname); }catch(e){ dl(data,fname); }
 }
 function dl(data,fname){ const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([data],{type:'application/json'})); a.download=fname; document.body.appendChild(a); a.click(); setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(a.href);},100); }
